@@ -257,6 +257,10 @@ main{padding-top:6px;}
 .dv-block-card-head .dv-block-card-range{
   font-size:12px; font-family:var(--font-mono); color:var(--ink-faint);
 }
+.dv-block-card-remaining{
+  font-size:12.5px; font-weight:600; color:var(--break);
+  padding:0 2px 10px; margin-top:-6px;
+}
 .dv-block-card .day-view-timeline{ padding-bottom:6px; }
 
 /* Each block row in the day view */
@@ -512,6 +516,35 @@ canvas{display:block; width:100%;}
 .theme-toggle button{padding:7px 14px; border-radius:8px; border:none; background:none; font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer;}
 .theme-toggle button.active{background:var(--bg-elevated); color:var(--ink); box-shadow:var(--shadow);}
 
+/* ---- Category management (Settings: productive activities / distractions) ---- */
+.cat-manage-list{padding:6px 8px;}
+.cat-manage-row{
+  display:flex; align-items:center; gap:10px; padding:10px 8px;
+  border-bottom:1px solid var(--rule); background:var(--bg-elevated);
+  touch-action:none;
+}
+.cat-manage-row:last-child{border-bottom:none;}
+.cat-manage-row.dragging{opacity:.4;}
+.cat-manage-row.drag-over{border-top:2px solid var(--work);}
+.cat-manage-handle{
+  flex:none; width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+  color:var(--ink-faint); cursor:grab; touch-action:none;
+}
+.cat-manage-handle svg{width:18px; height:18px;}
+.cat-manage-name{flex:1; font-size:14px; font-weight:600; color:var(--ink);}
+.cat-manage-delete{
+  flex:none; width:30px; height:30px; border-radius:9px; border:none; background:transparent;
+  color:var(--ink-faint); display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.cat-manage-delete:hover{background:var(--break-soft); color:var(--danger);}
+.cat-manage-delete svg{width:17px; height:17px;}
+.cat-manage-add{display:flex; gap:8px; padding:10px 12px 14px;}
+.cat-manage-add input{
+  flex:1; border:1px solid var(--rule-strong); background:var(--bg); border-radius:9px; padding:9px 12px;
+  font-size:14px; color:var(--ink); font-family:inherit;
+}
+.cat-manage-empty{padding:14px 12px; font-size:13px; color:var(--ink-faint); text-align:center;}
+
 .file-btn-row{display:flex; gap:10px;}
 .toast{
   position:fixed; bottom:calc(96px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%) translateY(10px);
@@ -729,6 +762,28 @@ footer.app-footer{text-align:center; padding:18px 0 6px; font-size:11.5px; color
       </div>
 
       <div class="settings-group">
+        <div class="section-head" style="margin:2px 0 4px;"><h2>Productive activities</h2></div>
+        <div class="cat-manage-list" id="pbreakCatManageList"></div>
+        <div class="cat-manage-add">
+          <input type="text" id="pbreakCatAddInput" placeholder="Add new activity">
+          <button class="icon-btn" id="pbreakCatAddBtn" style="background:var(--rule);">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="section-head" style="margin:2px 0 4px;"><h2>Distractions</h2></div>
+        <div class="cat-manage-list" id="breakCatManageList"></div>
+        <div class="cat-manage-add">
+          <input type="text" id="breakCatAddInput" placeholder="Add new distraction">
+          <button class="icon-btn" id="breakCatAddBtn" style="background:var(--rule);">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-group">
         <div class="settings-row">
           <div><div class="label">Export backup</div><div class="desc">Save all data as a JSON file</div></div>
           <button class="icon-btn" id="exportBtn" style="background:var(--rule);">
@@ -918,8 +973,8 @@ const DB_VERSION = 1;
 const STORE_DAYS = 'days';       // one record per date: { date, wakeTime, entries: [...] }
 const STORE_SETTINGS = 'settings'; // single record: { id:'app', ... }
 
-const PBREAK_CATEGORIES = ['Reading','Walking','Exercise','Meditation','Lunch','Coffee','Stretching','Family','Learning','Planning','Nap'];
-const BREAK_CATEGORIES = ['Instagram','YouTube','WhatsApp','Netflix','Gaming','Scrolling','Shopping','Music','Phone Call'];
+const PBREAK_CATEGORIES_DEFAULT = ['Reading','Walking','Exercise','Meditation','Lunch','Coffee','Stretching','Family','Learning','Planning','Nap'];
+const BREAK_CATEGORIES_DEFAULT = ['Instagram','YouTube','WhatsApp','Netflix','Gaming','Scrolling','Shopping','Music','Phone Call'];
 
 const KIND_COLOR_VAR = { work:'--work', pbreak:'--pbreak', break:'--break', unknown:'--unknown' };
 const KIND_LABEL = { work:'Work', pbreak:'Productive break', break:'Break', unknown:'Unaccounted' };
@@ -1080,7 +1135,11 @@ const DB = {
    4. APP STATE
    --------------------------------------------------------- */
 const State = {
-  settings: { id:'app', appName:'Life Ledger', theme:'light', wakeDuration:16, blockCount:4 },
+  settings: {
+    id:'app', appName:'Life Ledger', theme:'light', wakeDuration:16, blockCount:4,
+    pbreakCategories: PBREAK_CATEGORIES_DEFAULT.slice(),
+    breakCategories: BREAK_CATEGORIES_DEFAULT.slice()
+  },
   today: null,
   todayKey: todayKey(),
   editingEntryId: null,
@@ -1280,11 +1339,18 @@ function renderDayViewTimeline(timeline, wakeAbs, sleepAbs, nowAbs){
   blocks.forEach((block, bi) => {
     const card = document.createElement('div');
     card.className = 'dv-block-card';
+
+    const isCurrentBlock = nowAbs >= block.start && nowAbs < block.end;
+    const remainingHtml = isCurrentBlock
+      ? `<div class="dv-block-card-remaining">${durationLabel(block.end - nowAbs)} left in this block</div>`
+      : '';
+
     card.innerHTML = `
       <div class="dv-block-card-head">
         <span class="dv-block-card-title">Block ${block.index+1}</span>
         <span class="dv-block-card-range">${minutesToHM(block.start)}–${minutesToHM(block.end)}</span>
       </div>
+      ${remainingHtml}
       <div class="day-view-timeline"></div>
     `;
     container.appendChild(card);
@@ -1629,8 +1695,8 @@ function openEntrySheet(entryId){
   document.getElementById('pbreakCustomInput').value = '';
   document.getElementById('breakCustomInput').value = '';
 
-  buildChipGrid('pbreakChips', PBREAK_CATEGORIES, State.pbreakSelected, false);
-  buildChipGrid('breakChips', BREAK_CATEGORIES, State.breakSelected, true);
+  buildChipGrid('pbreakChips', State.settings.pbreakCategories, State.pbreakSelected, false);
+  buildChipGrid('breakChips', State.settings.breakCategories, State.breakSelected, true);
   // Reset break alloc UI state
   document.getElementById('breakDurationRow').style.display = 'none';
   document.getElementById('breakCustomField').style.display = 'none';
@@ -1680,7 +1746,9 @@ function buildChipGrid(containerId, categories, selectedSet, isBreak){
         document.getElementById('breakMinutesInput').value = remaining > 0 ? remaining : '';
         document.getElementById('breakMinutesInput').max = remaining;
         document.getElementById('breakDurationLabel').textContent = `How many minutes for ${cat === 'Custom' ? 'this activity' : cat}?`;
-        document.getElementById('breakMinutesInput').focus();
+        if (cat !== 'Custom'){
+          document.getElementById('breakMinutesInput').focus();
+        }
       } else {
         // pbreak chips: multi-select
         if (selectedSet.has(cat)){
@@ -1691,6 +1759,9 @@ function buildChipGrid(containerId, categories, selectedSet, isBreak){
           chip.classList.add('active');
         }
         document.getElementById('pbreakCustomField').style.display = selectedSet.has('Custom') ? 'block':'none';
+        if (cat === 'Custom' && selectedSet.has('Custom')){
+          document.getElementById('pbreakCustomInput').focus();
+        }
       }
     });
     el.appendChild(chip);
@@ -2394,7 +2465,140 @@ function applySettingsToUI(){
   document.getElementById('settingWakeDuration').value = State.settings.wakeDuration;
   document.getElementById('settingBlockCount').value = State.settings.blockCount;
   applyTheme(State.settings.theme);
+  renderCatManageList('pbreakCatManageList', 'pbreakCategories');
+  renderCatManageList('breakCatManageList', 'breakCategories');
 }
+
+/* ---------------------------------------------------------
+   13b. CATEGORY MANAGEMENT (Settings: productive activities / distractions)
+   Delete or drag-to-reorder the chip lists used when logging entries.
+   Reordering here directly reorders the quick-pick chips in the entry sheet.
+   --------------------------------------------------------- */
+let catDragState = null; // { listKey, fromIndex, rowEl }
+
+function renderCatManageList(containerId, settingsKey){
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+  const list = State.settings[settingsKey] || [];
+
+  if (!list.length){
+    const empty = document.createElement('div');
+    empty.className = 'cat-manage-empty';
+    empty.textContent = 'No items yet — add one below.';
+    el.appendChild(empty);
+    return;
+  }
+
+  list.forEach((name, index) => {
+    const row = document.createElement('div');
+    row.className = 'cat-manage-row';
+    row.dataset.index = index;
+    row.innerHTML = `
+      <span class="cat-manage-handle">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </span>
+      <span class="cat-manage-name">${escapeHtml(name)}</span>
+      <button class="cat-manage-delete" aria-label="Delete">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    `;
+
+    row.querySelector('.cat-manage-delete').addEventListener('click', async () => {
+      if (!confirm(`Remove "${name}"? This can't be undone.`)) return;
+      State.settings[settingsKey] = State.settings[settingsKey].filter((_, i) => i !== index);
+      await DB.putSettings(State.settings);
+      renderCatManageList(containerId, settingsKey);
+      showToast('Removed');
+    });
+
+    const handle = row.querySelector('.cat-manage-handle');
+    handle.addEventListener('pointerdown', (e) => startCatDrag(e, row, el, containerId, settingsKey));
+
+    el.appendChild(row);
+  });
+}
+
+function startCatDrag(e, row, listEl, containerId, settingsKey){
+  e.preventDefault();
+  const fromIndex = Number(row.dataset.index);
+  catDragState = { listEl, containerId, settingsKey, fromIndex, rowEl: row };
+  row.classList.add('dragging');
+
+  const rows = Array.from(listEl.querySelectorAll('.cat-manage-row'));
+
+  function onMove(ev){
+    if (!catDragState) return;
+    const y = ev.clientY;
+    let overRow = null;
+    for (const r of rows){
+      if (r === row) continue;
+      const rect = r.getBoundingClientRect();
+      if (y >= rect.top && y <= rect.bottom){ overRow = r; break; }
+    }
+    rows.forEach(r => r.classList.remove('drag-over'));
+    if (overRow) overRow.classList.add('drag-over');
+  }
+
+  function onUp(ev){
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', onUp);
+    if (!catDragState) return;
+
+    const y = ev.clientY;
+    let toIndex = fromIndex;
+    for (const r of rows){
+      if (r === row) continue;
+      const rect = r.getBoundingClientRect();
+      if (y >= rect.top && y <= rect.bottom){ toIndex = Number(r.dataset.index); break; }
+    }
+
+    row.classList.remove('dragging');
+    rows.forEach(r => r.classList.remove('drag-over'));
+
+    if (toIndex !== fromIndex){
+      const list = State.settings[settingsKey].slice();
+      const [moved] = list.splice(fromIndex, 1);
+      list.splice(toIndex, 0, moved);
+      State.settings[settingsKey] = list;
+      DB.putSettings(State.settings).then(() => {
+        renderCatManageList(containerId, settingsKey);
+        showToast('Reordered');
+      });
+    }
+    catDragState = null;
+  }
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+  document.addEventListener('pointercancel', onUp);
+}
+
+function setupCatAdd(inputId, btnId, settingsKey, containerId){
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  async function addItem(){
+    const val = input.value.trim();
+    if (!val) return;
+    const list = State.settings[settingsKey] || [];
+    if (list.some(x => x.toLowerCase() === val.toLowerCase())){
+      showToast('Already in the list');
+      return;
+    }
+    State.settings[settingsKey] = [...list, val];
+    await DB.putSettings(State.settings);
+    input.value = '';
+    renderCatManageList(containerId, settingsKey);
+    showToast('Added');
+  }
+  btn.addEventListener('click', addItem);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter'){ e.preventDefault(); addItem(); }
+  });
+}
+setupCatAdd('pbreakCatAddInput', 'pbreakCatAddBtn', 'pbreakCategories', 'pbreakCatManageList');
+setupCatAdd('breakCatAddInput', 'breakCatAddBtn', 'breakCategories', 'breakCatManageList');
 
 /* ---------------------------------------------------------
    14. TOAST

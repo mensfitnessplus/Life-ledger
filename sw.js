@@ -3,7 +3,7 @@
  * Bump CACHE_VERSION any time index.html/manifest/icons change.
  */
 
-const CACHE_VERSION = 'life-ledger-v1.2';
+const CACHE_VERSION = 'life-ledger-v1.3';
 const PRECACHE_URLS = [
   './',
   './index.html',
