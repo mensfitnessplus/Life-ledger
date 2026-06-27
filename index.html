@@ -1,0 +1,2470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0A0A0A">
+<meta name="description" content="Account for every minute of your waking day.">
+<title>Life Ledger</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+/* ============================================================
+   LIFE LEDGER — Design tokens
+   Concept: time-as-currency. A ledger, not a wellness dashboard.
+   ============================================================ */
+:root{
+  /* ---- Light theme (paper ledger) ---- */
+  --bg:#FAF8F4;
+  --bg-elevated:#FFFFFF;
+  --ink:#1A1B1E;
+  --ink-soft:#5B5B60;
+  --ink-faint:#9A9A9E;
+  --rule:#E7E3D8;
+  --rule-strong:#D8D3C4;
+
+  --work:#1B6B4A;
+  --work-soft:#1B6B4A1A;
+  --pbreak:#C9821B;
+  --pbreak-soft:#C9821B1A;
+  --break:#B33A2E;
+  --break-soft:#B33A2E1A;
+  --unknown:#6B6B70;
+  --unknown-soft:#6B6B7016;
+
+  --danger:#B33A2E;
+  --shadow:0 1px 2px rgba(20,20,15,.04), 0 4px 16px rgba(20,20,15,.06);
+  --shadow-lg:0 8px 30px rgba(20,20,15,.12);
+  --radius:18px;
+  --radius-sm:12px;
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:"SF Mono",SFMono-Regular,ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#000000;
+  --bg-elevated:#0E0F10;
+  --ink:#EDEDE8;
+  --ink-soft:#A6A6AA;
+  --ink-faint:#6B6B70;
+  --rule:#1C1D1F;
+  --rule-strong:#2A2B2D;
+
+  --work:#2FA876;
+  --work-soft:#2FA87626;
+  --pbreak:#E0A23B;
+  --pbreak-soft:#E0A23B26;
+  --break:#E0564A;
+  --break-soft:#E0564A26;
+  --unknown:#8A8A90;
+  --unknown-soft:#8A8A9020;
+
+  --danger:#E0564A;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 20px rgba(0,0,0,.5);
+  --shadow-lg:0 10px 40px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-ui);
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:none;
+  min-height:100vh;
+  transition:background .25s ease, color .25s ease;
+  padding-bottom:calc(84px + env(safe-area-inset-bottom));
+}
+button{font-family:inherit;}
+::selection{background:var(--work-soft);}
+.num{font-variant-numeric:tabular-nums; letter-spacing:-0.01em;}
+.mono{font-family:var(--font-mono); font-variant-numeric:tabular-nums;}
+
+/* ---- App shell ---- */
+#app{max-width:560px; margin:0 auto; padding:0 16px;}
+.topbar{
+  position:sticky; top:0; z-index:40;
+  background:var(--bg);
+  padding:calc(14px + env(safe-area-inset-top)) 16px 10px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid transparent;
+  transition:border-color .2s, background .25s;
+  max-width:560px; margin:0 auto;
+}
+.topbar.scrolled{border-bottom-color:var(--rule);}
+.brand{display:flex; align-items:center; gap:10px;}
+.brand-mark{
+  width:30px; height:30px; border-radius:8px;
+  background:var(--ink); flex:none;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .25s ease;
+}
+.brand-mark svg{width:16px; height:16px;}
+.brand-mark svg path{stroke:var(--bg);}
+.brand-name{font-weight:700; font-size:17px; letter-spacing:-0.02em;}
+.topbar-actions{display:flex; gap:6px;}
+.icon-btn{
+  width:38px; height:38px; border-radius:11px; border:none;
+  background:transparent; color:var(--ink-soft);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:background .15s, color .15s, transform .1s;
+}
+.icon-btn:active{transform:scale(.92);}
+.icon-btn:hover{background:var(--rule); color:var(--ink);}
+.icon-btn svg{width:21px; height:21px;}
+
+main{padding-top:6px;}
+.view{display:none; animation:fadeUp .28s ease both;}
+.view.active{display:block;}
+@keyframes fadeUp{
+  from{opacity:0; transform:translateY(6px);}
+  to{opacity:1; transform:translateY(0);}
+}
+@media (prefers-reduced-motion:reduce){
+  .view{animation:none;}
+  *{transition-duration:.01ms !important; animation-duration:.01ms !important;}
+}
+
+/* ---- Set-wake empty state ---- */
+.wake-gate{
+  margin-top:18vh; text-align:center; padding:0 8px;
+}
+.wake-gate .eyebrow{
+  font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink-faint); margin-bottom:10px;
+}
+.wake-gate h1{font-size:26px; margin:0 0 8px; letter-spacing:-0.02em;}
+.wake-gate p{color:var(--ink-soft); font-size:15px; line-height:1.5; margin:0 0 26px;}
+.time-input-big{
+  width:100%; border:1px solid var(--rule-strong); background:var(--bg-elevated);
+  border-radius:var(--radius); padding:16px; font-size:22px; text-align:center;
+  color:var(--ink); margin-bottom:14px; font-family:var(--font-ui);
+}
+.time-input-big:focus{outline:2px solid var(--work); outline-offset:2px;}
+
+/* ---- Balance strip (signature element): the day's receipt ---- */
+.balance-strip{
+  background:var(--bg-elevated); border:1px solid var(--rule);
+  border-radius:var(--radius); padding:16px 16px 14px; margin:10px 0 14px;
+  box-shadow:var(--shadow);
+}
+.balance-top{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;}
+.balance-label{font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint);}
+.balance-clock{font-size:15px; color:var(--ink-soft); font-weight:600;}
+.balance-figures{display:flex; align-items:flex-end; gap:10px; margin-bottom:14px;}
+.balance-countdown{font-size:34px; font-weight:700; letter-spacing:-0.02em; line-height:1;}
+.balance-countdown-label{font-size:13px; color:var(--ink-soft); padding-bottom:5px;}
+.balance-range{margin-left:auto; text-align:right; font-size:13px; color:var(--ink-soft); line-height:1.4;}
+.balance-range b{color:var(--ink); font-weight:600;}
+
+.segbar{
+  position:relative; height:14px; border-radius:7px; overflow:hidden;
+  background:var(--unknown-soft); display:flex; margin-bottom:8px;
+}
+.segbar > span{height:100%; transition:width .4s ease;}
+.segbar .now-marker{
+  position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink);
+  border-radius:1px;
+}
+.block-ticks{display:flex; justify-content:space-between; font-size:10.5px; color:var(--ink-faint); padding:0 1px;}
+
+.balance-legend{display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:12.5px;}
+.legend-item{display:flex; align-items:center; gap:6px; color:var(--ink-soft);}
+.legend-dot{width:8px; height:8px; border-radius:50%; flex:none;}
+
+/* ---- Section headers ---- */
+.section-head{
+  display:flex; align-items:baseline; justify-content:space-between;
+  margin:22px 0 10px; padding:0 2px;
+}
+.section-head h2{font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint); margin:0;}
+.section-head a{font-size:13px; color:var(--ink-soft); font-weight:600; cursor:pointer; background:none; border:none; padding:0; font-family:inherit;}
+
+/* ---- Stat card grid ---- */
+.stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.stat-card{
+  background:var(--bg-elevated); border:1px solid var(--rule); border-radius:var(--radius-sm);
+  padding:14px; box-shadow:var(--shadow);
+}
+.stat-card .stat-label{font-size:12px; color:var(--ink-faint); font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:6px;}
+.stat-card .stat-value{font-size:21px; font-weight:700; letter-spacing:-0.02em;}
+.stat-card .stat-sub{font-size:12px; color:var(--ink-soft); margin-top:2px;}
+.dot{width:7px; height:7px; border-radius:50%; flex:none;}
+.dot.work{background:var(--work);} .dot.pbreak{background:var(--pbreak);}
+.dot.break{background:var(--break);} .dot.unknown{background:var(--unknown);}
+
+/* ---- Progress bars (category totals) ---- */
+.cat-rows{background:var(--bg-elevated); border:1px solid var(--rule); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow);}
+.cat-row{padding:10px 0;}
+.cat-row + .cat-row{border-top:1px solid var(--rule);}
+.cat-row-top{display:flex; justify-content:space-between; font-size:13.5px; margin-bottom:7px;}
+.cat-row-top .name{display:flex; align-items:center; gap:7px; font-weight:600;}
+.cat-row-top .val{font-weight:700;}
+.bar-track{height:7px; border-radius:4px; background:var(--rule); overflow:hidden;}
+.bar-fill{height:100%; border-radius:4px; transition:width .5s ease;}
+
+/* ---- Timeline (ledger register rows) ---- */
+.timeline{background:var(--bg-elevated); border:1px solid var(--rule); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow);}
+.tl-row{
+  display:flex; align-items:center; gap:12px; padding:13px 16px;
+  border-bottom:1px solid var(--rule); cursor:pointer; transition:background .15s;
+}
+.tl-row:last-child{border-bottom:none;}
+.tl-row:active{background:var(--rule);}
+.tl-stripe{width:4px; align-self:stretch; border-radius:3px; flex:none; min-height:34px;}
+.tl-time{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-soft); width:84px; flex:none; line-height:1.5;}
+.tl-body{flex:1; min-width:0;}
+.tl-title{font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.tl-sub{font-size:12.5px; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;}
+.tl-dur{font-family:var(--font-mono); font-size:13px; font-weight:600; color:var(--ink-soft); flex:none;}
+.tl-row.gap{cursor:default;}
+.tl-row.gap .tl-title{color:var(--ink-faint); font-weight:500; font-style:italic;}
+.tl-empty{padding:40px 20px; text-align:center; color:var(--ink-faint); font-size:14px;}
+
+/* ---- Block analysis ---- */
+.block-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.block-card{background:var(--bg-elevated); border:1px solid var(--rule); border-radius:var(--radius-sm); padding:13px; box-shadow:var(--shadow);}
+.block-card .block-title{font-size:11.5px; font-weight:700; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:2px;}
+.block-card .block-range{font-size:11px; color:var(--ink-faint); margin-bottom:9px; font-family:var(--font-mono);}
+.block-mini-row{display:flex; justify-content:space-between; font-size:12px; padding:3px 0; color:var(--ink-soft);}
+.block-mini-row b{color:var(--ink); font-weight:600;}
+
+/* ---- Day View (Calendar-style) ---- */
+.day-view-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 2px 8px; margin-bottom:4px;
+}
+.day-view-date{font-size:15px; font-weight:700; letter-spacing:-0.01em;}
+.day-view-clock{font-size:15px; color:var(--ink-soft); font-weight:600;}
+
+.day-view-timeline{
+  position:relative; padding-bottom:16px;
+}
+
+/* Per-block timeline cards (Today page split into N blocks) */
+.dv-block-card{
+  background:var(--bg-elevated); border:1px solid var(--rule); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:14px 14px 6px; margin-bottom:14px;
+}
+.dv-block-card-head{
+  display:flex; align-items:baseline; justify-content:space-between;
+  padding:0 2px 10px;
+}
+.dv-block-card-head .dv-block-card-title{
+  font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint);
+}
+.dv-block-card-head .dv-block-card-range{
+  font-size:12px; font-family:var(--font-mono); color:var(--ink-faint);
+}
+.dv-block-card .day-view-timeline{ padding-bottom:6px; }
+
+/* Each block row in the day view */
+.dv-block{
+  display:flex; gap:10px; align-items:stretch; position:relative;
+}
+.dv-time-col{
+  width:68px; flex:none; display:flex; flex-direction:column;
+  align-items:flex-end; padding-right:10px; padding-top:10px;
+  font-size:11.5px; font-family:var(--font-mono); color:var(--ink-faint);
+  user-select:none;
+}
+.dv-time-col .dv-t-start{ font-weight:600; color:var(--ink-soft); }
+.dv-time-col .dv-t-end{ margin-top:auto; padding-top:4px; }
+
+.dv-bar-col{ flex:none; width:5px; border-radius:3px; }
+
+.dv-body{
+  flex:1; min-width:0;
+  border-radius:14px; padding:10px 12px;
+  cursor:pointer; transition:filter .15s;
+  min-height:48px; display:flex; flex-direction:column; justify-content:center;
+  position:relative; overflow:hidden;
+}
+.dv-body:active{ filter:brightness(.92); }
+
+.dv-body-name{
+  font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; line-height:1.2; margin-bottom:2px;
+}
+.dv-body-meta{
+  font-size:11.5px; opacity:.8; font-family:var(--font-mono);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* Gap / unaccounted block */
+.dv-block.dv-gap .dv-body{
+  background:transparent; cursor:default;
+}
+.dv-block.dv-gap .dv-body-name{
+  color:var(--ink-faint); font-weight:500; font-style:italic; font-size:12.5px;
+}
+
+/* Hour separator lines */
+.dv-hour-mark{
+  display:flex; align-items:center; gap:10px; margin:0;
+}
+.dv-hour-mark .dv-h-label{
+  width:68px; flex:none; text-align:right; padding-right:10px;
+  font-size:11px; font-family:var(--font-mono); color:var(--ink-faint); padding-top:1px;
+}
+.dv-hour-mark .dv-h-line{
+  flex:1; height:1px; background:var(--rule);
+}
+
+/* Wake / Sleep anchor rows */
+.dv-anchor{
+  display:flex; gap:10px; align-items:center; padding:8px 0;
+}
+.dv-anchor .dv-anch-label{
+  width:68px; flex:none; text-align:right; padding-right:10px;
+  font-size:11.5px; font-weight:700; color:var(--ink); font-family:var(--font-mono);
+}
+.dv-anchor .dv-anch-bar{
+  width:5px; flex:none; height:20px; border-radius:3px; background:var(--ink);
+}
+.dv-anchor .dv-anch-name{
+  font-size:13px; font-weight:700; color:var(--ink);
+}
+
+/* Now indicator line */
+.dv-now-line{
+  display:flex; gap:10px; align-items:center; margin:0;
+}
+.dv-now-line .dv-nl-label{
+  width:68px; flex:none; text-align:right; padding-right:6px;
+  font-size:10.5px; font-weight:700; color:var(--break); font-family:var(--font-mono);
+}
+.dv-now-line .dv-nl-dot{
+  width:10px; height:10px; border-radius:50%; background:var(--break); flex:none; margin-left:-2px;
+}
+.dv-now-line .dv-nl-line{
+  flex:1; height:2px; background:var(--break); border-radius:1px;
+}
+
+
+.fab{
+  position:fixed; right:max(20px, calc(50% - 280px + 20px)); bottom:calc(78px + env(safe-area-inset-bottom));
+  width:58px; height:58px; border-radius:50%; border:none;
+  background:var(--ink); color:var(--bg); box-shadow:var(--shadow-lg);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  z-index:50; transition:transform .15s ease;
+}
+.fab:active{transform:scale(.9);}
+.fab svg{width:26px; height:26px;}
+
+/* ---- Bottom nav ---- */
+.bottom-nav{
+  position:fixed; left:0; right:0; bottom:0; z-index:45;
+  background:var(--bg-elevated); border-top:1px solid var(--rule);
+  display:flex; padding:6px max(8px, calc(50% - 280px + 8px)) calc(6px + env(safe-area-inset-bottom));
+  max-width:560px; margin:0 auto;
+}
+.nav-btn{
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+  background:none; border:none; padding:8px 4px; color:var(--ink-faint);
+  cursor:pointer; border-radius:12px; transition:color .15s;
+}
+.nav-btn svg{width:22px; height:22px;}
+.nav-btn span{font-size:11px; font-weight:600;}
+.nav-btn.active{color:var(--ink);}
+
+/* ---- Bottom sheet ---- */
+.sheet-backdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.42); z-index:60;
+  opacity:0; pointer-events:none; transition:opacity .22s ease;
+}
+.sheet-backdrop.open{opacity:1; pointer-events:auto;}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:61;
+  background:var(--bg-elevated); border-radius:22px 22px 0 0;
+  max-width:560px; margin:0 auto; max-height:92vh; overflow-y:auto;
+  transform:translateY(100%); transition:transform .28s cubic-bezier(.32,.72,0,1);
+  padding:10px 18px calc(22px + env(safe-area-inset-bottom));
+  box-shadow:0 -10px 40px rgba(0,0,0,.2);
+}
+.sheet-backdrop.open .sheet{transform:translateY(0);}
+.sheet-handle{width:36px; height:4px; background:var(--rule-strong); border-radius:3px; margin:6px auto 14px;}
+.sheet-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+.sheet-header h3{font-size:18px; margin:0; letter-spacing:-0.01em;}
+.sheet-close{background:none; border:none; color:var(--ink-soft); width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;}
+.sheet-close:hover{background:var(--rule);}
+
+.field-row{display:flex; gap:10px; margin-bottom:14px;}
+.field{flex:1;}
+.field label{display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:6px;}
+.field input[type=time], .field input[type=text], .field input[type=number], .field textarea, .field select{
+  width:100%; border:1px solid var(--rule-strong); background:var(--bg);
+  border-radius:11px; padding:11px 12px; font-size:15px; color:var(--ink); font-family:inherit;
+}
+.field input:focus, .field textarea:focus, .field select:focus{outline:2px solid var(--work); outline-offset:1px;}
+.field textarea{resize:vertical; min-height:64px;}
+.duration-pill{
+  text-align:center; font-family:var(--font-mono); font-size:13px; color:var(--ink-soft);
+  background:var(--rule); border-radius:9px; padding:7px; margin-bottom:14px;
+}
+
+.kind-toggle{display:flex; gap:8px; margin-bottom:16px;}
+.kind-btn{
+  flex:1; padding:11px 6px; border-radius:12px; border:1.5px solid var(--rule-strong);
+  background:var(--bg); color:var(--ink-soft); font-weight:600; font-size:13px; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; gap:4px; transition:all .15s;
+}
+.kind-btn .dot{width:8px;height:8px;}
+.kind-btn.active{border-color:transparent; color:#fff;}
+.kind-btn.active[data-kind="work"]{background:var(--work);}
+.kind-btn.active[data-kind="pbreak"]{background:var(--pbreak);}
+.kind-btn.active[data-kind="break"]{background:var(--break);}
+.kind-btn.active .dot{background:#fff;}
+
+.chip-grid{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+.chip{
+  padding:8px 14px; border-radius:20px; border:1.5px solid var(--rule-strong);
+  background:var(--bg); color:var(--ink-soft); font-size:13.5px; font-weight:600; cursor:pointer;
+  transition:all .15s; user-select:none;
+}
+.chip.active{background:var(--ink); color:var(--bg); border-color:var(--ink);}
+
+/* ---- Break allocation flow (remaining-based) ---- */
+.break-remaining-banner{
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--break-soft); border:1.5px solid var(--break); border-radius:13px;
+  padding:12px 16px; margin-bottom:14px;
+}
+.break-remaining-banner.break-remaining-done{
+  background:var(--work-soft); border-color:var(--work);
+}
+.brb-label{ font-size:13px; font-weight:700; color:var(--break); }
+.break-remaining-done .brb-label{ color:var(--work); }
+.brb-value{ font-size:22px; font-weight:800; color:var(--break); }
+
+.break-alloc-item{
+  display:flex; align-items:center; gap:10px; padding:8px 0;
+  border-bottom:1px solid var(--rule);
+}
+.break-alloc-item:last-child{ border-bottom:none; }
+.break-alloc-name{ flex:1; font-size:14px; font-weight:600; }
+.break-alloc-mins{ font-family:var(--font-mono); font-size:13px; color:var(--ink-soft); font-weight:600; }
+.break-alloc-del{
+  background:none; border:none; color:var(--ink-faint); width:26px; height:26px;
+  border-radius:50%; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; flex:none; font-size:16px; line-height:1;
+}
+.break-alloc-del:hover{ background:var(--break-soft); color:var(--break); }
+
+
+
+.btn{
+  width:100%; padding:14px; border-radius:13px; border:none; font-size:15.5px; font-weight:700;
+  cursor:pointer; transition:transform .1s, opacity .15s;
+}
+.btn:active{transform:scale(.98);}
+.btn-primary{background:var(--ink); color:var(--bg);}
+.btn-primary:disabled{opacity:.35;}
+.btn-danger{background:var(--break-soft); color:var(--break);}
+.btn-ghost{background:var(--rule); color:var(--ink);}
+.btn-row{display:flex; gap:10px; margin-top:6px;}
+.btn-row .btn{flex:1;}
+
+.error-text{color:var(--danger); font-size:12.5px; margin:-6px 0 12px; font-weight:600;}
+
+/* ---- Calendar ---- */
+.cal-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+.cal-nav h3{font-size:17px; margin:0; letter-spacing:-0.01em;}
+.cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin-bottom:6px;}
+.cal-dow{text-align:center; font-size:10.5px; font-weight:700; color:var(--ink-faint); padding-bottom:4px;}
+.cal-day{
+  position:relative; aspect-ratio:1; border-radius:11px; border:1px solid var(--rule);
+  background:var(--bg-elevated); display:flex; flex-direction:column; align-items:center; justify-content:center;
+  cursor:pointer; font-size:13px; font-weight:600; gap:3px;
+}
+.cal-day.empty{border:none; background:none; cursor:default;}
+.cal-day.today{border:1.5px solid var(--ink);}
+.cal-day .cal-bars{display:flex; gap:2px; height:4px;}
+.cal-day .cal-bars span{width:4px; border-radius:2px;}
+.cal-day.selected{background:var(--ink); color:var(--bg);}
+
+/* ---- Analytics ---- */
+.seg-control{display:flex; background:var(--rule); border-radius:12px; padding:3px; margin-bottom:16px;}
+.seg-btn{flex:1; padding:9px; border-radius:9px; border:none; background:none; font-weight:600; font-size:13.5px; color:var(--ink-soft); cursor:pointer;}
+.seg-btn.active{background:var(--bg-elevated); color:var(--ink); box-shadow:var(--shadow);}
+.metric-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;}
+canvas{display:block; width:100%;}
+.chart-card{background:var(--bg-elevated); border:1px solid var(--rule); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); margin-bottom:16px;}
+.chart-card h4{font-size:13px; margin:0 0 12px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; font-weight:700;}
+.top-list{display:flex; flex-direction:column; gap:10px;}
+.top-list-row{display:flex; align-items:center; gap:10px; font-size:13.5px;}
+.top-list-row .rank{width:18px; color:var(--ink-faint); font-weight:700; font-size:12px;}
+.top-list-row .name{flex:1; font-weight:600;}
+.top-list-row .amt{font-family:var(--font-mono); color:var(--ink-soft);}
+
+/* ---- Settings ---- */
+.settings-group{background:var(--bg-elevated); border:1px solid var(--rule); border-radius:var(--radius); margin-bottom:16px; overflow:hidden; box-shadow:var(--shadow);}
+.settings-row{display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--rule); gap:12px;}
+.settings-row:last-child{border-bottom:none;}
+.settings-row .label{font-size:14.5px; font-weight:600;}
+.settings-row .desc{font-size:12px; color:var(--ink-soft); margin-top:1px;}
+.settings-row input[type=text], .settings-row input[type=number]{
+  border:1px solid var(--rule-strong); background:var(--bg); border-radius:9px; padding:8px 10px;
+  font-size:14px; color:var(--ink); width:120px; text-align:right; font-family:inherit;
+}
+.theme-toggle{display:flex; background:var(--rule); border-radius:11px; padding:3px; gap:2px;}
+.theme-toggle button{padding:7px 14px; border-radius:8px; border:none; background:none; font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer;}
+.theme-toggle button.active{background:var(--bg-elevated); color:var(--ink); box-shadow:var(--shadow);}
+
+.file-btn-row{display:flex; gap:10px;}
+.toast{
+  position:fixed; bottom:calc(96px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%) translateY(10px);
+  background:var(--ink); color:var(--bg); padding:12px 20px; border-radius:30px; font-size:13.5px; font-weight:600;
+  box-shadow:var(--shadow-lg); z-index:80; opacity:0; pointer-events:none; transition:opacity .25s, transform .25s;
+  max-width:90%; text-align:center;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+.update-banner{
+  position:fixed; top:calc(8px + env(safe-area-inset-top)); left:12px; right:12px; max-width:536px; margin:0 auto;
+  background:var(--ink); color:var(--bg); padding:12px 16px; border-radius:14px; font-size:13.5px;
+  display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:90;
+  box-shadow:var(--shadow-lg); transform:translateY(-120%); transition:transform .3s ease;
+}
+.update-banner.show{transform:translateY(0);}
+.update-banner button{background:var(--bg); color:var(--ink); border:none; border-radius:9px; padding:7px 12px; font-weight:700; font-size:12.5px; cursor:pointer;}
+
+.empty-state{text-align:center; padding:50px 20px; color:var(--ink-faint);}
+.empty-state svg{width:40px; height:40px; margin-bottom:10px; opacity:.5;}
+.empty-state p{font-size:14px; margin:0;}
+
+.day-detail-head{display:flex; align-items:center; gap:10px; margin-bottom:16px;}
+.back-btn{background:none; border:none; color:var(--ink-soft); width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;}
+.back-btn:hover{background:var(--rule);}
+.day-detail-head h2{font-size:18px; margin:0; letter-spacing:-0.01em;}
+
+footer.app-footer{text-align:center; padding:18px 0 6px; font-size:11.5px; color:var(--ink-faint);}
+</style>
+</head>
+<body>
+
+<div id="updateBanner" class="update-banner">
+  <span>A new version of Life Ledger is ready.</span>
+  <button id="updateReloadBtn">Reload</button>
+</div>
+
+<div id="app">
+  <div class="topbar" id="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 4h14M5 4v16M5 4l-1 16h16l-1-16M9 9h6M9 13h6" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </div>
+      <span class="brand-name" id="appNameLabel">Life Ledger</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="navCalendarTop" aria-label="Calendar">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.7"/><path d="M3 9.5h18M8 3v3M16 3v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      </button>
+      <button class="icon-btn" id="navSettingsTop" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.97 7.97 0 0 0 0-2l1.9-1.5-2-3.5-2.3.6a8 8 0 0 0-1.7-1l-.3-2.4h-4l-.3 2.4a8 8 0 0 0-1.7 1l-2.3-.6-2 3.5L6 11a7.97 7.97 0 0 0 0 2l-1.9 1.5 2 3.5 2.3-.6a8 8 0 0 0 1.7 1l.3 2.4h4l.3-2.4a8 8 0 0 0 1.7-1l2.3.6 2-3.5L19.4 13Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <main>
+    <!-- ============ TODAY VIEW (Calendar Day View) ============ -->
+    <section class="view active" id="view-dashboard">
+
+      <!-- Gate shown when no wake time set for today -->
+      <div class="wake-gate" id="wakeGate" style="display:none;">
+        <div class="eyebrow">Good morning</div>
+        <h1>What time did you wake up?</h1>
+        <p>Life Ledger will account for every minute until you sleep.</p>
+        <input type="time" class="time-input-big" id="wakeTimeInput">
+        <button class="btn btn-primary" id="confirmWakeBtn">Start today's ledger</button>
+      </div>
+
+      <!-- Day timeline (Google Calendar Day View style) -->
+      <div id="dashboardContent" style="display:none;">
+        <div class="day-view-header">
+          <span class="day-view-date" id="dayViewDate"></span>
+          <span class="day-view-clock num" id="liveClock">--:--</span>
+        </div>
+        <div class="day-view-timeline" id="dayViewTimeline"></div>
+      </div>
+    </section>
+
+    <!-- ============ DETAILS VIEW (Stats / old dashboard) ============ -->
+    <section class="view" id="view-details">
+      <div id="detailsNoWake" style="display:none; text-align:center; padding:60px 20px; color:var(--ink-faint); font-size:14px;">
+        <p>Start today's ledger first — tap <b>Today</b> to set your wake time.</p>
+      </div>
+      <div id="detailsContent" style="display:none;">
+        <!-- Signature balance strip -->
+        <div class="balance-strip" style="margin-top:10px;">
+          <div class="balance-top">
+            <span class="balance-label">Today's balance</span>
+          </div>
+          <div class="balance-figures">
+            <div>
+              <div class="balance-countdown num" id="countdownValue">--:--</div>
+            </div>
+            <div class="balance-countdown-label">until sleep target</div>
+            <div class="balance-range">
+              Wake <b id="balanceWake">--:--</b><br>
+              Sleep <b id="balanceSleep">--:--</b>
+            </div>
+          </div>
+          <div class="segbar" id="segbar"></div>
+          <div class="block-ticks" id="blockTicks"></div>
+          <div class="balance-legend">
+            <span class="legend-item"><span class="legend-dot" style="background:var(--work)"></span>Work</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--pbreak)"></span>Productive break</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--break)"></span>Break</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--unknown)"></span>Unaccounted</span>
+          </div>
+        </div>
+
+        <!-- Stat cards -->
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label"><span class="dot work"></span>Today's work</div>
+            <div class="stat-value num" id="statWork">0h 0m</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><span class="dot pbreak"></span>Productive break</div>
+            <div class="stat-value num" id="statPbreak">0h 0m</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><span class="dot break"></span>Today's break</div>
+            <div class="stat-value num" id="statBreak">0h 0m</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><span class="dot unknown"></span>Unaccounted</div>
+            <div class="stat-value num" id="statUnknown">0h 0m</div>
+          </div>
+        </div>
+
+        <div class="section-head"><h2>Live progress</h2></div>
+        <div class="cat-rows" id="progressRows"></div>
+
+        <div class="section-head"><h2>Block analysis</h2></div>
+        <div class="block-grid" id="blockGrid"></div>
+
+        <div class="section-head"><h2>Daily summary</h2></div>
+        <div class="cat-rows" id="summaryCard" style="display:flex; flex-direction:column; gap:9px; font-size:13.5px; padding:14px 16px;"></div>
+      </div>
+    </section>
+
+    <!-- ============ CALENDAR VIEW ============ -->
+    <section class="view" id="view-calendar">
+      <div class="cal-nav">
+        <button class="icon-btn" id="calPrevMonth"><svg viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h3 id="calMonthLabel">Month</h3>
+        <button class="icon-btn" id="calNextMonth"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="cal-grid" id="calDowRow"></div>
+      <div class="cal-grid" id="calGrid"></div>
+    </section>
+
+    <!-- ============ DAY DETAIL VIEW ============ -->
+    <section class="view" id="view-daydetail">
+      <div class="day-detail-head">
+        <button class="back-btn" id="dayDetailBack"><svg viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <h2 id="dayDetailTitle">Day</h2>
+      </div>
+      <div id="dayDetailContent"></div>
+    </section>
+
+    <!-- ============ ANALYTICS VIEW ============ -->
+    <section class="view" id="view-analytics">
+      <div class="section-head" style="margin-top:6px;"><h2>Analytics</h2></div>
+      <div class="seg-control" id="analyticsRange">
+        <button class="seg-btn active" data-range="daily">Daily</button>
+        <button class="seg-btn" data-range="weekly">Weekly</button>
+        <button class="seg-btn" data-range="monthly">Monthly</button>
+      </div>
+      <div class="metric-grid" id="analyticsMetrics"></div>
+      <div class="chart-card">
+        <h4>Category totals</h4>
+        <canvas id="chartCategory" height="140"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>Work hours trend</h4>
+        <canvas id="chartTrend" height="140"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>Top distractions</h4>
+        <div class="top-list" id="topDistractions"></div>
+      </div>
+      <div class="chart-card">
+        <h4>Top productive activities</h4>
+        <div class="top-list" id="topProductive"></div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS VIEW ============ -->
+    <section class="view" id="view-settings">
+      <div class="section-head" style="margin-top:6px;"><h2>Settings</h2></div>
+
+      <div class="settings-group">
+        <div class="settings-row">
+          <div><div class="label">App name</div></div>
+          <input type="text" id="settingAppName" maxlength="24">
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Theme</div></div>
+          <div class="theme-toggle" id="themeToggle">
+            <button data-theme="light">Light</button>
+            <button data-theme="dark">AMOLED</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-row">
+          <div><div class="label">Wake duration</div><div class="desc">Hours awake before sleep target</div></div>
+          <input type="number" id="settingWakeDuration" min="4" max="24" step="0.5">
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Number of blocks</div><div class="desc">Splits your day evenly</div></div>
+          <input type="number" id="settingBlockCount" min="1" max="8" step="1">
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-row">
+          <div><div class="label">Export backup</div><div class="desc">Save all data as a JSON file</div></div>
+          <button class="icon-btn" id="exportBtn" style="background:var(--rule);">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="settings-row">
+          <div><div class="label">Import backup</div><div class="desc">Restore from a JSON file</div></div>
+          <button class="icon-btn" id="importBtn" style="background:var(--rule);">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 15V3m0 12l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <input type="file" id="importFile" accept="application/json" style="display:none;">
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-row">
+          <div><div class="label" style="color:var(--danger);">Delete all data</div><div class="desc">This cannot be undone</div></div>
+          <button class="icon-btn" id="deleteAllBtn" style="background:var(--break-soft); color:var(--danger);">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <footer class="app-footer">Life Ledger · all data stays on this device</footer>
+    </section>
+  </main>
+</div>
+
+<button class="fab" id="fabAdd" aria-label="Add entry">
+  <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+</button>
+
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-view="dashboard">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Today</span>
+  </button>
+  <button class="nav-btn" data-view="details">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Details</span>
+  </button>
+  <button class="nav-btn" data-view="calendar">
+    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 9.5h18M8 3v3M16 3v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>Calendar</span>
+  </button>
+  <button class="nav-btn" data-view="analytics">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Analytics</span>
+  </button>
+  <button class="nav-btn" data-view="settings">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13a7.97 7.97 0 0 0 0-2l1.9-1.5-2-3.5-2.3.6a8 8 0 0 0-1.7-1l-.3-2.4h-4l-.3 2.4a8 8 0 0 0-1.7 1l-2.3-.6-2 3.5L6 11a7.97 7.97 0 0 0 0 2l-1.9 1.5 2 3.5 2.3-.6a8 8 0 0 0 1.7 1l.3 2.4h4l.3-2.4a8 8 0 0 0 1.7-1l2.3.6 2-3.5L19.4 13Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    <span>Settings</span>
+  </button>
+</nav>
+
+<!-- ============ ENTRY BOTTOM SHEET ============ -->
+<div class="sheet-backdrop" id="entrySheetBackdrop">
+  <div class="sheet" id="entrySheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h3 id="entrySheetTitle">Add entry</h3>
+      <button class="sheet-close" id="entrySheetClose">
+        <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="entryStart">Start time</label>
+        <input type="time" id="entryStart">
+      </div>
+      <div class="field">
+        <label for="entryEnd">End time</label>
+        <input type="time" id="entryEnd">
+      </div>
+    </div>
+    <div class="duration-pill" id="entryDurationPill">Duration: 0m</div>
+
+    <label style="display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:8px;">What was this time used for?</label>
+    <div class="kind-toggle" id="kindToggle">
+      <button class="kind-btn" data-kind="work"><span class="dot work"></span>Work</button>
+      <button class="kind-btn" data-kind="pbreak"><span class="dot pbreak"></span>Productive</button>
+      <button class="kind-btn" data-kind="break"><span class="dot break"></span>Break</button>
+    </div>
+
+    <!-- WORK fields -->
+    <div id="workFields" style="display:none;">
+      <div class="field-row">
+        <div class="field">
+          <label for="workProject">Project</label>
+          <input type="text" id="workProject" placeholder="e.g. Life Ledger">
+        </div>
+        <div class="field">
+          <label for="workTask">Task</label>
+          <input type="text" id="workTask" placeholder="e.g. Gap detection">
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="workTags">Tags (optional, comma separated)</label>
+        <input type="text" id="workTags" placeholder="e.g. deep-work, client">
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="workNotes">Notes</label>
+        <textarea id="workNotes" placeholder="Anything worth remembering?"></textarea>
+      </div>
+    </div>
+
+    <!-- PRODUCTIVE BREAK fields -->
+    <div id="pbreakFields" style="display:none;">
+      <label style="display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:8px;">Categories (select any that apply)</label>
+      <div class="chip-grid" id="pbreakChips"></div>
+      <div class="field" id="pbreakCustomField" style="display:none; margin-bottom:14px;">
+        <label for="pbreakCustomInput">Custom label</label>
+        <input type="text" id="pbreakCustomInput" placeholder="e.g. Journaling">
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="pbreakNotes">Notes</label>
+        <textarea id="pbreakNotes" placeholder="Optional"></textarea>
+      </div>
+    </div>
+
+    <!-- BREAK fields -->
+    <div id="breakFields" style="display:none;">
+      <label style="display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:8px;">What did you do during this break?</label>
+
+      <!-- Active allocation step (shown while remaining > 0) -->
+      <div id="breakAllocStep">
+        <div class="break-remaining-banner" id="breakRemainingBanner">
+          <span class="brb-label">Remaining</span>
+          <span class="brb-value num" id="breakRemainingValue">0 min</span>
+        </div>
+        <div class="chip-grid" id="breakChips"></div>
+        <div class="field" id="breakCustomField" style="display:none; margin-bottom:14px;">
+          <label for="breakCustomInput">Custom label</label>
+          <input type="text" id="breakCustomInput" placeholder="e.g. Doomscrolling">
+        </div>
+        <div class="break-duration-row" id="breakDurationRow" style="display:none;">
+          <label style="display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:6px;" id="breakDurationLabel">How many minutes?</label>
+          <div style="display:flex; gap:10px; align-items:center; margin-bottom:14px;">
+            <input type="number" id="breakMinutesInput" min="1" step="1" placeholder="0"
+              style="flex:1; border:1px solid var(--rule-strong); background:var(--bg); border-radius:11px; padding:11px 12px; font-size:22px; text-align:center; color:var(--ink); font-family:var(--font-mono);">
+            <span style="color:var(--ink-soft); font-size:15px; font-weight:600;">min</span>
+          </div>
+          <button class="btn btn-ghost" id="breakConfirmMinutes" style="margin-bottom:14px;">Add →</button>
+        </div>
+      </div>
+
+      <!-- Allocated items list (always visible, grows as items added) -->
+      <div id="breakSplitRows"></div>
+
+      <!-- Done state / notes (shown once remaining = 0) -->
+      <div id="breakDoneArea" style="display:none;">
+        <div class="break-remaining-banner break-remaining-done">
+          <span class="brb-label">All accounted for ✓</span>
+        </div>
+      </div>
+
+      <div class="field" style="margin:14px 0;">
+        <label for="breakNotes">Notes</label>
+        <textarea id="breakNotes" placeholder="Optional"></textarea>
+      </div>
+    </div>
+
+    <div class="error-text" id="entryError" style="display:none;"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-danger" id="deleteEntryBtn" style="display:none; flex:0 0 100px;">Delete</button>
+      <button class="btn btn-primary" id="saveEntryBtn">Save entry</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   LIFE LEDGER — Application logic
+   Organized as small focused modules sharing one global state.
+   ============================================================ */
+
+/* ---------------------------------------------------------
+   1. CONSTANTS & CATEGORY DEFINITIONS
+   --------------------------------------------------------- */
+const DB_NAME = 'life-ledger-db';
+const DB_VERSION = 1;
+const STORE_DAYS = 'days';       // one record per date: { date, wakeTime, entries: [...] }
+const STORE_SETTINGS = 'settings'; // single record: { id:'app', ... }
+
+const PBREAK_CATEGORIES = ['Reading','Walking','Exercise','Meditation','Lunch','Coffee','Stretching','Family','Learning','Planning','Nap'];
+const BREAK_CATEGORIES = ['Instagram','YouTube','WhatsApp','Netflix','Gaming','Scrolling','Shopping','Music','Phone Call'];
+
+const KIND_COLOR_VAR = { work:'--work', pbreak:'--pbreak', break:'--break', unknown:'--unknown' };
+const KIND_LABEL = { work:'Work', pbreak:'Productive break', break:'Break', unknown:'Unaccounted' };
+
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/* ---------------------------------------------------------
+   2. TIME HELPERS
+   --------------------------------------------------------- */
+// All times within a "day record" are stored as minutes-since-wake-day-start (an integer),
+// using an absolute minute count from local midnight of the day the user woke up.
+// This lets sleep targets that cross midnight (e.g. wake 7am +16h = 11pm, fine; but wake 11pm +16h = 3pm next day)
+// remain simple integer arithmetic without juggling Date objects everywhere.
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+function todayKey(d = new Date()){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+
+function minutesNowAbsolute(){
+  const n = new Date();
+  return n.getHours()*60 + n.getMinutes() + n.getSeconds()/60;
+}
+
+// Parse "HH:MM" (24h, from <input type=time>) into minutes-since-midnight (0-1439)
+function parseHM(hm){
+  const [h,m] = hm.split(':').map(Number);
+  return h*60+m;
+}
+
+function minutesToHM(mins){
+  let m = ((Math.round(mins) % 1440) + 1440) % 1440;
+  const h = Math.floor(m/60), mm = m%60;
+  return `${pad2(h)}:${pad2(mm)}`;
+}
+
+function minutesToDisplay(mins){
+  let m = ((Math.round(mins) % 1440) + 1440) % 1440;
+  let h = Math.floor(m/60), mm = m%60;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  let h12 = h % 12; if (h12 === 0) h12 = 12;
+  return `${h12}:${pad2(mm)} ${ampm}`;
+}
+
+function durationLabel(mins){
+  mins = Math.max(0, Math.round(mins));
+  const h = Math.floor(mins/60), m = mins%60;
+  if (h <= 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+/* Day-record "absolute minute" model:
+   wakeAbs = wake time in minutes-since-midnight on the wake date (0-1439)
+   Every entry start/end is stored as an absolute minute count that may exceed 1440
+   if it rolls past midnight, i.e. entry.start/end are minutes since the wake day's midnight,
+   unbounded upward (e.g. 1450 = 00:10 the next calendar day). This keeps all arithmetic linear. */
+
+function toAbsolute(hm, wakeAbs){
+  // Given a clock time "HH:MM" that occurs on or after wake, return its absolute minute count
+  // relative to the wake day's midnight, handling midnight rollover.
+  let m = parseHM(hm);
+  if (m < wakeAbs - 5) m += 1440; // if the clock time is earlier than wake, assume it's the next calendar day
+  return m;
+}
+
+/* ---------------------------------------------------------
+   3. INDEXEDDB LAYER
+   --------------------------------------------------------- */
+const DB = {
+  _db: null,
+  open(){
+    return new Promise((resolve, reject) => {
+      if (this._db) return resolve(this._db);
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_DAYS)){
+          db.createObjectStore(STORE_DAYS, { keyPath: 'date' });
+        }
+        if (!db.objectStoreNames.contains(STORE_SETTINGS)){
+          db.createObjectStore(STORE_SETTINGS, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
+      req.onerror = (e) => reject(e.target.error);
+    });
+  },
+  async getDay(dateKey){
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_DAYS, 'readonly');
+      const req = tx.objectStore(STORE_DAYS).get(dateKey);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async putDay(dayRecord){
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_DAYS, 'readwrite');
+      tx.objectStore(STORE_DAYS).put(dayRecord);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async getAllDays(){
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_DAYS, 'readonly');
+      const req = tx.objectStore(STORE_DAYS).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async deleteDay(dateKey){
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_DAYS, 'readwrite');
+      tx.objectStore(STORE_DAYS).delete(dateKey);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async clearAllDays(){
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_DAYS, 'readwrite');
+      tx.objectStore(STORE_DAYS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async getSettings(){
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_SETTINGS, 'readonly');
+      const req = tx.objectStore(STORE_SETTINGS).get('app');
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async putSettings(settings){
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_SETTINGS, 'readwrite');
+      tx.objectStore(STORE_SETTINGS).put({ id:'app', ...settings });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+};
+
+/* ---------------------------------------------------------
+   4. APP STATE
+   --------------------------------------------------------- */
+const State = {
+  settings: { id:'app', appName:'Life Ledger', theme:'light', wakeDuration:16, blockCount:4 },
+  today: null,
+  todayKey: todayKey(),
+  editingEntryId: null,
+  sheetKind: 'work',
+  pbreakSelected: new Set(),
+  breakSelected: new Set(),
+  breakSplits: {},
+  breakCurrentCat: null,
+  calMonthCursor: new Date(),
+  selectedDayKey: null,
+  analyticsRange: 'daily'
+};
+
+function uid(){
+  return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+}
+
+/* ---------------------------------------------------------
+   5. GAP DETECTION & DAY COMPUTATION
+   --------------------------------------------------------- */
+// Given a day record, returns a sorted, gap-filled list of "blocks" covering
+// the full span from wake to (wake + wakeDuration*60), each block being either
+// a real entry or a synthetic { kind:'unknown', synthetic:true } gap filler.
+function computeFullTimeline(dayRecord, wakeDurationHours){
+  const wakeAbs = dayRecord.wakeAbs;
+  const sleepAbs = wakeAbs + wakeDurationHours*60;
+  const entries = [...dayRecord.entries].sort((a,b) => a.start - b.start);
+
+  const timeline = [];
+  let cursor = wakeAbs;
+
+  for (const entry of entries){
+    const start = Math.max(entry.start, wakeAbs);
+    const end = Math.min(entry.end, sleepAbs);
+    if (end <= cursor) continue; // fully out of range or overlapping/before cursor — skip defensively
+    if (start > cursor){
+      timeline.push({ id:'gap-'+cursor, kind:'unknown', start:cursor, end:start, synthetic:true });
+    }
+    timeline.push({ ...entry, start:Math.max(start,cursor), end });
+    cursor = Math.max(cursor, end);
+  }
+  if (cursor < sleepAbs){
+    timeline.push({ id:'gap-'+cursor, kind:'unknown', start:cursor, end:sleepAbs, synthetic:true });
+  }
+  return timeline;
+}
+
+function categoryTotals(timeline){
+  const totals = { work:0, pbreak:0, break:0, unknown:0 };
+  for (const block of timeline){
+    totals[block.kind] = (totals[block.kind]||0) + (block.end - block.start);
+  }
+  return totals;
+}
+
+function blockAnalysis(timeline, wakeAbs, wakeDurationHours, blockCount){
+  const totalMins = wakeDurationHours*60;
+  const blockLen = totalMins/blockCount;
+  const blocks = [];
+  for (let i=0;i<blockCount;i++){
+    const bStart = wakeAbs + i*blockLen;
+    const bEnd = wakeAbs + (i+1)*blockLen;
+    const totals = { work:0, pbreak:0, break:0, unknown:0 };
+    for (const block of timeline){
+      const overlapStart = Math.max(block.start, bStart);
+      const overlapEnd = Math.min(block.end, bEnd);
+      if (overlapEnd > overlapStart){
+        totals[block.kind] += (overlapEnd - overlapStart);
+      }
+    }
+    blocks.push({ index:i, start:bStart, end:bEnd, totals });
+  }
+  return blocks;
+}
+
+/* ---------------------------------------------------------
+   6. DAY RECORD LOADING / CREATION
+   --------------------------------------------------------- */
+async function ensureTodayLoaded(){
+  const key = todayKey();
+  State.todayKey = key;
+  let rec = await DB.getDay(key);
+  State.today = rec;
+  return rec;
+}
+
+async function createTodayWithWake(wakeHM){
+  const wakeAbs = parseHM(wakeHM);
+  const rec = { date: State.todayKey, wakeAbs, entries: [] };
+  await DB.putDay(rec);
+  State.today = rec;
+}
+
+async function saveTodayRecord(){
+  if (State.today) await DB.putDay(State.today);
+}
+
+/* ---------------------------------------------------------
+   7. RENDERING — TODAY (Day View) + DETAILS
+   --------------------------------------------------------- */
+let clockInterval = null;
+
+function startClockLoop(){
+  if (clockInterval) clearInterval(clockInterval);
+  clockInterval = setInterval(() => { renderDashboard(); renderDetails(); }, 1000*15);
+  setInterval(updateLiveClockLabel, 1000);
+}
+
+function updateLiveClockLabel(){
+  const el = document.getElementById('liveClock');
+  if (!el) return;
+  const now = new Date();
+  let h = now.getHours(), m = now.getMinutes();
+  const ampm = h >= 12 ? 'PM':'AM';
+  let h12 = h%12; if (h12===0) h12=12;
+  el.textContent = `${h12}:${pad2(m)} ${ampm}`;
+}
+
+/* ---- TODAY: Google Calendar Day View ---- */
+function renderDashboard(){
+  const wakeGate = document.getElementById('wakeGate');
+  const content = document.getElementById('dashboardContent');
+
+  if (!State.today){
+    wakeGate.style.display = 'block';
+    content.style.display = 'none';
+    const wi = document.getElementById('wakeTimeInput');
+    if (!wi.value){
+      const n = new Date();
+      wi.value = `${pad2(n.getHours())}:${pad2(n.getMinutes())}`;
+    }
+    return;
+  }
+  wakeGate.style.display = 'none';
+  content.style.display = 'block';
+
+  // Date header
+  const dateEl = document.getElementById('dayViewDate');
+  if (dateEl){
+    const d = new Date();
+    dateEl.textContent = d.toLocaleDateString(undefined,{ weekday:'long', month:'long', day:'numeric' });
+  }
+  updateLiveClockLabel();
+
+  const wakeDurationHours = State.settings.wakeDuration;
+  const wakeAbs = State.today.wakeAbs;
+  const sleepAbs = wakeAbs + wakeDurationHours*60;
+
+  const nowClock = minutesNowAbsolute();
+  let nowAbs = nowClock;
+  if (nowClock < wakeAbs - 5) nowAbs = nowClock + 1440;
+
+  const timeline = computeFullTimeline(State.today, wakeDurationHours);
+
+  renderDayViewTimeline(timeline, wakeAbs, sleepAbs, nowAbs);
+}
+
+const DV_PX_PER_MIN = 2.2;   // pixels per minute (determines block heights)
+const DV_MIN_HEIGHT = 48;     // minimum block height in px
+
+function kindBgAlpha(kind){
+  return { work:'--work-soft', pbreak:'--pbreak-soft', break:'--break-soft', unknown:'--unknown-soft' }[kind];
+}
+
+// Split a flat timeline into N time-blocks, cutting any entry that spans a
+// block boundary into two pieces. Both pieces keep the original id/kind/etc,
+// just with start/end clamped to that block's range — so either piece still
+// refers to (and acts on) the same underlying entry.
+function splitTimelineIntoBlocks(timeline, wakeAbs, sleepAbs, blockCount){
+  const totalSpan = sleepAbs - wakeAbs;
+  const blockLen = totalSpan / blockCount;
+  const blocks = [];
+  for (let i=0;i<blockCount;i++){
+    const bStart = wakeAbs + i*blockLen;
+    const bEnd = wakeAbs + (i+1)*blockLen;
+    const segments = [];
+    for (const entry of timeline){
+      const segStart = Math.max(entry.start, bStart);
+      const segEnd = Math.min(entry.end, bEnd);
+      if (segEnd > segStart){
+        segments.push({ ...entry, start:segStart, end:segEnd });
+      }
+    }
+    blocks.push({ index:i, start:bStart, end:bEnd, segments });
+  }
+  return blocks;
+}
+
+function renderDayViewTimeline(timeline, wakeAbs, sleepAbs, nowAbs){
+  const container = document.getElementById('dayViewTimeline');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const blockCount = State.settings.blockCount;
+  const blocks = splitTimelineIntoBlocks(timeline, wakeAbs, sleepAbs, blockCount);
+
+  blocks.forEach((block, bi) => {
+    const card = document.createElement('div');
+    card.className = 'dv-block-card';
+    card.innerHTML = `
+      <div class="dv-block-card-head">
+        <span class="dv-block-card-title">Block ${block.index+1}</span>
+        <span class="dv-block-card-range">${minutesToHM(block.start)}–${minutesToHM(block.end)}</span>
+      </div>
+      <div class="day-view-timeline"></div>
+    `;
+    container.appendChild(card);
+    const el = card.querySelector('.day-view-timeline');
+
+    const isFirstBlock = bi === 0;
+    const isLastBlock = bi === blocks.length - 1;
+
+    // Wake anchor only on the very first block
+    if (isFirstBlock){
+      const wakeRow = document.createElement('div');
+      wakeRow.className = 'dv-anchor';
+      wakeRow.innerHTML = `
+        <span class="dv-anch-label">${minutesToDisplay(wakeAbs)}</span>
+        <span class="dv-anch-bar"></span>
+        <span class="dv-anch-name">Wake</span>
+      `;
+      el.appendChild(wakeRow);
+    }
+
+    for (const seg of block.segments){
+      const durMins = seg.end - seg.start;
+      const heightPx = Math.max(DV_MIN_HEIGHT, durMins * DV_PX_PER_MIN);
+      const colorVar = KIND_COLOR_VAR[seg.kind];
+      const bgVar = kindBgAlpha(seg.kind);
+
+      const row = document.createElement('div');
+      row.className = 'dv-block' + (seg.synthetic ? ' dv-gap' : '');
+
+      if (seg.synthetic){
+        row.innerHTML = `
+          <div class="dv-time-col"><span class="dv-t-start">${minutesToDisplay(seg.start)}</span><span class="dv-t-end">${minutesToDisplay(seg.end)}</span></div>
+          <div class="dv-bar-col" style="background:var(${colorVar}); opacity:.25; height:${heightPx}px;"></div>
+          <div class="dv-body" style="height:${heightPx}px;">
+            <div class="dv-body-name">Unaccounted</div>
+            <div class="dv-body-meta">${durationLabel(durMins)}</div>
+          </div>
+        `;
+      } else {
+        const title = escapeHtml(entryTitle(seg));
+        row.innerHTML = `
+          <div class="dv-time-col"><span class="dv-t-start">${minutesToDisplay(seg.start)}</span><span class="dv-t-end">${minutesToDisplay(seg.end)}</span></div>
+          <div class="dv-bar-col" style="background:var(${colorVar}); height:${heightPx}px;"></div>
+          <div class="dv-body" style="height:${heightPx}px; background:var(${bgVar});">
+            <div class="dv-body-name" style="color:var(${colorVar})">${title}</div>
+            <div class="dv-body-meta" style="color:var(${colorVar})">${minutesToDisplay(seg.start)} – ${minutesToDisplay(seg.end)} · ${durationLabel(durMins)}</div>
+          </div>
+        `;
+        // Both halves of a split entry carry the same seg.id, so clicking/long-pressing
+        // either piece still targets the single underlying entry.
+        row.querySelector('.dv-body').addEventListener('click', () => openEntrySheet(seg.id));
+
+        let pressTimer;
+        const body = row.querySelector('.dv-body');
+        body.addEventListener('pointerdown', () => {
+          pressTimer = setTimeout(() => showBlockContextMenu(seg), 520);
+        });
+        body.addEventListener('pointerup', () => clearTimeout(pressTimer));
+        body.addEventListener('pointercancel', () => clearTimeout(pressTimer));
+      }
+
+      el.appendChild(row);
+    }
+
+    // Final time label at the end of this block (block-end time, or sleep target if last block)
+    const endRow = document.createElement('div');
+    endRow.className = 'dv-anchor';
+    endRow.innerHTML = `
+      <span class="dv-anch-label">${minutesToDisplay(isLastBlock ? sleepAbs : block.end)}</span>
+      <span class="dv-anch-bar"></span>
+      <span class="dv-anch-name">${isLastBlock ? 'Sleep target' : ''}</span>
+    `;
+    el.appendChild(endRow);
+  });
+
+  if (!timeline.some(b => !b.synthetic)){
+    const hint = document.createElement('p');
+    hint.style.cssText = 'text-align:center; color:var(--ink-faint); font-size:13.5px; padding:20px 0 0;';
+    hint.textContent = 'Tap + to log your first block of time.';
+    container.appendChild(hint);
+  }
+}
+
+function appendNowLine(el, nowAbs){
+  const nl = document.createElement('div');
+  nl.className = 'dv-now-line';
+  nl.innerHTML = `<span class="dv-nl-label">${minutesToDisplay(nowAbs)}</span><span class="dv-nl-dot"></span><span class="dv-nl-line"></span>`;
+  el.appendChild(nl);
+}
+
+function showBlockContextMenu(block){
+  if (!block || !block.id) return;
+  const ok = confirm(`Delete "${entryTitle(block)}"?`);
+  if (!ok) return;
+  State.today.entries = State.today.entries.filter(e => e.id !== block.id);
+  saveTodayRecord().then(() => { renderDashboard(); renderDetails(); showToast('Entry deleted'); });
+}
+
+/* ---- DETAILS: all statistics ---- */
+function renderDetails(){
+  const noWake = document.getElementById('detailsNoWake');
+  const content = document.getElementById('detailsContent');
+  if (!noWake || !content) return;
+
+  if (!State.today){
+    noWake.style.display = 'block';
+    content.style.display = 'none';
+    return;
+  }
+  noWake.style.display = 'none';
+  content.style.display = 'block';
+
+  const wakeDurationHours = State.settings.wakeDuration;
+  const blockCount = State.settings.blockCount;
+  const wakeAbs = State.today.wakeAbs;
+  const sleepAbs = wakeAbs + wakeDurationHours*60;
+
+  const nowClock = minutesNowAbsolute();
+  let nowAbs = nowClock;
+  if (nowClock < wakeAbs - 5) nowAbs = nowClock + 1440;
+
+  const timeline = computeFullTimeline(State.today, wakeDurationHours);
+  const totals = categoryTotals(timeline);
+  const totalSpan = sleepAbs - wakeAbs;
+
+  document.getElementById('balanceWake').textContent = minutesToDisplay(wakeAbs);
+  document.getElementById('balanceSleep').textContent = minutesToDisplay(sleepAbs);
+
+  const remaining = Math.max(0, sleepAbs - nowAbs);
+  document.getElementById('countdownValue').textContent = remaining > 0
+    ? durationLabel(remaining)
+    : 'Time\u2019s up';
+
+  const segbar = document.getElementById('segbar');
+  segbar.innerHTML = '';
+  ['work','pbreak','break','unknown'].forEach(kind => {
+    const pct = totalSpan>0 ? (totals[kind]/totalSpan*100) : 0;
+    if (pct <= 0) return;
+    const span = document.createElement('span');
+    span.style.width = pct+'%';
+    span.style.background = `var(${KIND_COLOR_VAR[kind]})`;
+    segbar.appendChild(span);
+  });
+  const marker = document.createElement('div');
+  marker.className = 'now-marker';
+  const nowPct = totalSpan>0 ? Math.min(100, Math.max(0,(nowAbs-wakeAbs)/totalSpan*100)) : 0;
+  marker.style.left = nowPct+'%';
+  segbar.appendChild(marker);
+
+  const ticksEl = document.getElementById('blockTicks');
+  ticksEl.innerHTML = '';
+  for (let i=0;i<=blockCount;i++){
+    const t = document.createElement('span');
+    const abs = wakeAbs + (totalSpan/blockCount)*i;
+    t.textContent = minutesToHM(abs);
+    ticksEl.appendChild(t);
+  }
+
+  document.getElementById('statWork').textContent = durationLabel(totals.work);
+  document.getElementById('statPbreak').textContent = durationLabel(totals.pbreak);
+  document.getElementById('statBreak').textContent = durationLabel(totals.break);
+  document.getElementById('statUnknown').textContent = durationLabel(totals.unknown);
+
+  const progressRows = document.getElementById('progressRows');
+  progressRows.innerHTML = '';
+  ['work','pbreak','break','unknown'].forEach(kind => {
+    const pct = totalSpan>0 ? Math.min(100, totals[kind]/totalSpan*100) : 0;
+    const row = document.createElement('div');
+    row.className = 'cat-row';
+    row.innerHTML = `
+      <div class="cat-row-top">
+        <span class="name"><span class="dot ${kind}"></span>${KIND_LABEL[kind]}</span>
+        <span class="val">${durationLabel(totals[kind])}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:var(${KIND_COLOR_VAR[kind]})"></div></div>
+    `;
+    progressRows.appendChild(row);
+  });
+
+  const blocks = blockAnalysis(timeline, wakeAbs, wakeDurationHours, blockCount);
+  const blockGrid = document.getElementById('blockGrid');
+  blockGrid.innerHTML = '';
+  blocks.forEach(b => {
+    const card = document.createElement('div');
+    card.className = 'block-card';
+    card.innerHTML = `
+      <div class="block-title">Block ${b.index+1}</div>
+      <div class="block-range">${minutesToHM(b.start)}–${minutesToHM(b.end)}</div>
+      <div class="block-mini-row"><span>Work</span><b>${durationLabel(b.totals.work)}</b></div>
+      <div class="block-mini-row"><span>Productive</span><b>${durationLabel(b.totals.pbreak)}</b></div>
+      <div class="block-mini-row"><span>Break</span><b>${durationLabel(b.totals.break)}</b></div>
+      <div class="block-mini-row"><span>Unaccounted</span><b>${durationLabel(b.totals.unknown)}</b></div>
+    `;
+    blockGrid.appendChild(card);
+  });
+
+  renderDailySummary(timeline, totals, blocks, wakeAbs, sleepAbs, nowAbs);
+}
+
+
+
+
+function entryTitle(entry){
+  if (entry.kind === 'work') return entry.project ? `${entry.project}${entry.task ? ' · '+entry.task : ''}` : (entry.task || 'Work');
+  if (entry.kind === 'pbreak') return (entry.tags && entry.tags.length) ? entry.tags.join(', ') : 'Productive break';
+  if (entry.kind === 'break') return (entry.splits ? Object.keys(entry.splits).join(', ') : 'Break');
+  return 'Unaccounted';
+}
+function entrySubtitle(entry){
+  if (entry.kind === 'work') return entry.notes || (entry.tags && entry.tags.length ? entry.tags.join(', ') : '');
+  return entry.notes || '';
+}
+
+function escapeHtml(str){
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function renderDailySummary(timeline, totals, blocks, wakeAbs, sleepAbs, nowAbs){
+  const el = document.getElementById('summaryCard');
+  const totalSpan = sleepAbs - wakeAbs;
+  const completion = totalSpan>0 ? Math.min(100, Math.round(((totals.work+totals.pbreak+totals.break)/totalSpan)*100) ) : 0;
+
+  // most used distraction
+  const distractionTotals = {};
+  const productiveTotals = {};
+  timeline.forEach(b => {
+    if (b.synthetic) return;
+    if (b.kind === 'break' && b.splits){
+      Object.entries(b.splits).forEach(([k,v]) => distractionTotals[k]=(distractionTotals[k]||0)+v);
+    }
+    if (b.kind === 'pbreak' && b.tags){
+      const share = (b.end-b.start)/Math.max(1,b.tags.length);
+      b.tags.forEach(t => productiveTotals[t]=(productiveTotals[t]||0)+share);
+    }
+  });
+  const topDistraction = Object.entries(distractionTotals).sort((a,b)=>b[1]-a[1])[0];
+  const topProductive = Object.entries(productiveTotals).sort((a,b)=>b[1]-a[1])[0];
+
+  let bestBlock = null, worstBlock = null;
+  blocks.forEach(b => {
+    const prodRatio = b.totals.work + b.totals.pbreak;
+    if (!bestBlock || prodRatio > bestBlock.score) bestBlock = { index:b.index, score:prodRatio };
+    if (!worstBlock || prodRatio < worstBlock.score) worstBlock = { index:b.index, score:prodRatio };
+  });
+
+  function row(label, value){
+    return `<div style="display:flex; justify-content:space-between;"><span style="color:var(--ink-soft)">${label}</span><span style="font-weight:700;">${value}</span></div>`;
+  }
+
+  el.innerHTML = [
+    row('Wake', minutesToDisplay(wakeAbs)),
+    row('Sleep target', minutesToDisplay(sleepAbs)),
+    row('Work', durationLabel(totals.work)),
+    row('Productive break', durationLabel(totals.pbreak)),
+    row('Break', durationLabel(totals.break)),
+    row('Unaccounted', durationLabel(totals.unknown)),
+    row('Most used distraction', topDistraction ? `${topDistraction[0]} (${durationLabel(topDistraction[1])})` : '—'),
+    row('Most productive activity', topProductive ? `${topProductive[0]} (${durationLabel(topProductive[1])})` : '—'),
+    row('Most productive block', bestBlock ? `Block ${bestBlock.index+1}` : '—'),
+    row('Least productive block', worstBlock ? `Block ${worstBlock.index+1}` : '—'),
+    row('Completion', completion+'%'),
+  ].join('');
+}
+
+/* ---------------------------------------------------------
+   8. WAKE GATE
+   --------------------------------------------------------- */
+document.getElementById('confirmWakeBtn').addEventListener('click', async () => {
+  const val = document.getElementById('wakeTimeInput').value;
+  if (!val) return showToast('Please choose a wake time');
+  await createTodayWithWake(val);
+  renderDashboard();
+  renderDetails();
+  showToast('Today\u2019s ledger started');
+});
+
+/* ---------------------------------------------------------
+   9. ENTRY BOTTOM SHEET
+   --------------------------------------------------------- */
+const sheetBackdrop = document.getElementById('entrySheetBackdrop');
+const entryStartInput = document.getElementById('entryStart');
+const entryEndInput = document.getElementById('entryEnd');
+
+function openSheet(){ sheetBackdrop.classList.add('open'); document.body.style.overflow='hidden'; }
+function closeSheet(){ sheetBackdrop.classList.remove('open'); document.body.style.overflow=''; }
+
+document.getElementById('entrySheetClose').addEventListener('click', closeSheet);
+sheetBackdrop.addEventListener('click', (e) => { if (e.target === sheetBackdrop) closeSheet(); });
+
+document.getElementById('fabAdd').addEventListener('click', () => openEntrySheet(null));
+
+function lastEntryEndAbs(){
+  if (!State.today) return null;
+  const timeline = computeFullTimeline(State.today, State.settings.wakeDuration);
+  const real = State.today.entries;
+  if (!real.length) return State.today.wakeAbs;
+  return Math.max(...real.map(e => e.end));
+}
+
+function openEntrySheet(entryId){
+  if (!State.today) return;
+  State.editingEntryId = entryId;
+  const isEdit = !!entryId;
+  document.getElementById('entrySheetTitle').textContent = isEdit ? 'Edit entry' : 'Add entry';
+  document.getElementById('deleteEntryBtn').style.display = isEdit ? 'block' : 'none';
+  document.getElementById('entryError').style.display = 'none';
+
+  let entry = isEdit ? State.today.entries.find(e => e.id === entryId) : null;
+
+  const wakeAbs = State.today.wakeAbs;
+  const sleepAbs = wakeAbs + State.settings.wakeDuration*60;
+  let startAbs, endAbs;
+
+  if (entry){
+    startAbs = entry.start; endAbs = entry.end;
+  } else {
+    startAbs = lastEntryEndAbs();
+    const nowClock = minutesNowAbsolute();
+    endAbs = nowClock < wakeAbs - 5 ? nowClock+1440 : nowClock;
+    if (endAbs <= startAbs) endAbs = startAbs + 15;
+    endAbs = Math.min(endAbs, sleepAbs);
+  }
+
+  entryStartInput.value = minutesToHM(startAbs);
+  entryEndInput.value = minutesToHM(endAbs);
+
+  // reset kind selections
+  State.pbreakSelected = new Set(entry && entry.kind==='pbreak' ? entry.tags : []);
+  State.breakSelected = new Set();
+  State.breakSplits = entry && entry.kind==='break' ? { ...entry.splits } : {};
+  State.breakCurrentCat = null;
+
+  document.getElementById('workProject').value = entry && entry.kind==='work' ? (entry.project||'') : '';
+  document.getElementById('workTask').value = entry && entry.kind==='work' ? (entry.task||'') : '';
+  document.getElementById('workTags').value = entry && entry.kind==='work' && entry.tags ? entry.tags.join(', ') : '';
+  document.getElementById('workNotes').value = entry && entry.kind==='work' ? (entry.notes||'') : '';
+  document.getElementById('pbreakNotes').value = entry && entry.kind==='pbreak' ? (entry.notes||'') : '';
+  document.getElementById('breakNotes').value = entry && entry.kind==='break' ? (entry.notes||'') : '';
+  document.getElementById('pbreakCustomInput').value = '';
+  document.getElementById('breakCustomInput').value = '';
+
+  buildChipGrid('pbreakChips', PBREAK_CATEGORIES, State.pbreakSelected, false);
+  buildChipGrid('breakChips', BREAK_CATEGORIES, State.breakSelected, true);
+  // Reset break alloc UI state
+  document.getElementById('breakDurationRow').style.display = 'none';
+  document.getElementById('breakCustomField').style.display = 'none';
+
+  setKind(entry ? entry.kind : 'work');
+  updateDurationPill();
+  if (entry && entry.kind === 'break') renderBreakAllocUI();
+  openSheet();
+}
+
+function setKind(kind){
+  State.sheetKind = kind;
+  document.querySelectorAll('.kind-btn').forEach(b => b.classList.toggle('active', b.dataset.kind===kind));
+  document.getElementById('workFields').style.display = kind==='work' ? 'block':'none';
+  document.getElementById('pbreakFields').style.display = kind==='pbreak' ? 'block':'none';
+  document.getElementById('breakFields').style.display = kind==='break' ? 'block':'none';
+  if (kind === 'break') renderBreakAllocUI();
+  // Re-enable save button for non-break kinds
+  if (kind !== 'break') document.getElementById('saveEntryBtn').disabled = false;
+}
+document.querySelectorAll('.kind-btn').forEach(btn => {
+  btn.addEventListener('click', () => setKind(btn.dataset.kind));
+});
+
+function buildChipGrid(containerId, categories, selectedSet, isBreak){
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  categories.concat(['Custom']).forEach(cat => {
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (selectedSet.has(cat) ? ' active' : '');
+    chip.textContent = cat;
+    chip.type = 'button';
+    chip.addEventListener('click', () => {
+      if (isBreak){
+        // Break chips: single-select to pick the CURRENT item being allocated
+        document.querySelectorAll(`#${containerId} .chip`).forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        State.breakCurrentCat = cat;
+        if (cat === 'Custom'){
+          document.getElementById('breakCustomField').style.display = 'block';
+          document.getElementById('breakCustomInput').focus();
+        } else {
+          document.getElementById('breakCustomField').style.display = 'none';
+        }
+        document.getElementById('breakDurationRow').style.display = 'block';
+        const remaining = breakRemaining();
+        document.getElementById('breakMinutesInput').value = remaining > 0 ? remaining : '';
+        document.getElementById('breakMinutesInput').max = remaining;
+        document.getElementById('breakDurationLabel').textContent = `How many minutes for ${cat === 'Custom' ? 'this activity' : cat}?`;
+        document.getElementById('breakMinutesInput').focus();
+      } else {
+        // pbreak chips: multi-select
+        if (selectedSet.has(cat)){
+          selectedSet.delete(cat);
+          chip.classList.remove('active');
+        } else {
+          selectedSet.add(cat);
+          chip.classList.add('active');
+        }
+        document.getElementById('pbreakCustomField').style.display = selectedSet.has('Custom') ? 'block':'none';
+      }
+    });
+    el.appendChild(chip);
+  });
+  if (containerId === 'pbreakChips'){
+    document.getElementById('pbreakCustomField').style.display = selectedSet.has('Custom') ? 'block':'none';
+  }
+}
+
+function breakRemaining(){
+  const total = currentEntryDurationMinutes();
+  const allocated = Object.values(State.breakSplits).reduce((a,b)=>a+(Number(b)||0),0);
+  return Math.max(0, total - allocated);
+}
+
+function renderBreakAllocUI(){
+  const remaining = breakRemaining();
+  const total = currentEntryDurationMinutes();
+
+  // Remaining banner
+  const banner = document.getElementById('breakRemainingBanner');
+  const bannerVal = document.getElementById('breakRemainingValue');
+  const doneArea = document.getElementById('breakDoneArea');
+  const allocStep = document.getElementById('breakAllocStep');
+
+  if (remaining <= 0){
+    allocStep.style.display = 'none';
+    doneArea.style.display = 'block';
+  } else {
+    allocStep.style.display = 'block';
+    doneArea.style.display = 'none';
+    bannerVal.textContent = `${remaining} min`;
+    // Update max on input
+    const inp = document.getElementById('breakMinutesInput');
+    if (inp) inp.max = remaining;
+  }
+
+  // Render allocated items list
+  renderBreakSplitRows();
+
+  // Save button state
+  const saveBtn = document.getElementById('saveEntryBtn');
+  if (saveBtn) saveBtn.disabled = (remaining !== 0 || total === 0);
+}
+
+function renderBreakSplitRows(){
+  const el = document.getElementById('breakSplitRows');
+  el.innerHTML = '';
+  const entries = Object.entries(State.breakSplits).filter(([,v]) => v > 0);
+  if (!entries.length) return;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'background:var(--bg-elevated); border:1px solid var(--rule); border-radius:13px; padding:4px 12px; margin-bottom:14px;';
+  entries.forEach(([cat, mins]) => {
+    const row = document.createElement('div');
+    row.className = 'break-alloc-item';
+    row.innerHTML = `
+      <span class="break-alloc-name">${escapeHtml(cat)}</span>
+      <span class="break-alloc-mins">${mins} min</span>
+      <button class="break-alloc-del" data-cat="${escapeHtml(cat)}" aria-label="Remove">×</button>
+    `;
+    row.querySelector('.break-alloc-del').addEventListener('click', () => {
+      delete State.breakSplits[cat];
+      // Reset chip selection if needed
+      State.breakCurrentCat = null;
+      document.querySelectorAll('#breakChips .chip').forEach(c => c.classList.remove('active'));
+      document.getElementById('breakDurationRow').style.display = 'none';
+      document.getElementById('breakCustomField').style.display = 'none';
+      renderBreakAllocUI();
+    });
+    wrap.appendChild(row);
+  });
+  el.appendChild(wrap);
+}
+
+document.getElementById('breakConfirmMinutes').addEventListener('click', () => {
+  let cat = State.breakCurrentCat;
+  if (!cat) return;
+  if (cat === 'Custom'){
+    const cv = document.getElementById('breakCustomInput').value.trim();
+    if (!cv){ showToast('Enter a custom activity name'); return; }
+    cat = cv;
+  }
+  const mins = parseInt(document.getElementById('breakMinutesInput').value, 10);
+  if (!mins || mins <= 0){ showToast('Enter a valid number of minutes'); return; }
+  const remaining = breakRemaining();
+  if (mins > remaining){ showToast(`Only ${remaining} min remaining`); return; }
+
+  State.breakSplits[cat] = (State.breakSplits[cat] || 0) + mins;
+
+  // Reset chip selection and duration row
+  State.breakCurrentCat = null;
+  document.querySelectorAll('#breakChips .chip').forEach(c => c.classList.remove('active'));
+  document.getElementById('breakDurationRow').style.display = 'none';
+  document.getElementById('breakCustomField').style.display = 'none';
+  document.getElementById('breakCustomInput').value = '';
+  document.getElementById('breakMinutesInput').value = '';
+
+  renderBreakAllocUI();
+});
+
+document.getElementById('breakMinutesInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('breakConfirmMinutes').click();
+});
+
+
+function currentEntryDurationMinutes(){
+  const s = parseHM(entryStartInput.value||'00:00');
+  let e = parseHM(entryEndInput.value||'00:00');
+  if (e <= s) e += 1440;
+  return e - s;
+}
+
+document.getElementById('breakCustomInput').addEventListener('input', () => {
+  // Just update the label if custom is selected
+  if (State.breakCurrentCat === 'Custom'){
+    const cv = document.getElementById('breakCustomInput').value.trim();
+    document.getElementById('breakDurationLabel').textContent = `How many minutes for ${cv || 'this activity'}?`;
+  }
+});
+
+function updateDurationPill(){
+  const mins = currentEntryDurationMinutes();
+  document.getElementById('entryDurationPill').textContent = `Duration: ${durationLabel(mins)}`;
+  if (State.sheetKind === 'break') renderBreakAllocUI();
+}
+entryStartInput.addEventListener('input', updateDurationPill);
+entryEndInput.addEventListener('input', updateDurationPill);
+
+document.getElementById('saveEntryBtn').addEventListener('click', async () => {
+  const errEl = document.getElementById('entryError');
+  errEl.style.display = 'none';
+
+  if (!State.today) return;
+  const wakeAbs = State.today.wakeAbs;
+  const sleepAbs = wakeAbs + State.settings.wakeDuration*60;
+
+  let start = toAbsolute(entryStartInput.value, wakeAbs);
+  let end = toAbsolute(entryEndInput.value, wakeAbs);
+  if (end <= start) end += 1440;
+
+  if (start < wakeAbs){
+    errEl.textContent = 'Start time cannot be before your wake time.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (end > sleepAbs + 1){
+    errEl.textContent = 'End time cannot be after your sleep target.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (end <= start){
+    errEl.textContent = 'End time must be after start time.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const kind = State.sheetKind;
+  let entry = { id: State.editingEntryId || uid(), kind, start, end };
+
+  if (kind === 'work'){
+    const project = document.getElementById('workProject').value.trim();
+    const task = document.getElementById('workTask').value.trim();
+    const tagsRaw = document.getElementById('workTags').value.trim();
+    entry.project = project;
+    entry.task = task;
+    entry.tags = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
+    entry.notes = document.getElementById('workNotes').value.trim();
+    if (!project && !task){
+      errEl.textContent = 'Add a project or task name for this work entry.';
+      errEl.style.display = 'block';
+      return;
+    }
+  } else if (kind === 'pbreak'){
+    let tags = [...State.pbreakSelected];
+    const customVal = document.getElementById('pbreakCustomInput').value.trim();
+    tags = tags.filter(t => t !== 'Custom');
+    if (State.pbreakSelected.has('Custom') && customVal) tags.push(customVal);
+    if (!tags.length){
+      errEl.textContent = 'Select at least one category.';
+      errEl.style.display = 'block';
+      return;
+    }
+    entry.tags = tags;
+    entry.notes = document.getElementById('pbreakNotes').value.trim();
+  } else if (kind === 'break'){
+    const splits = {};
+    Object.entries(State.breakSplits).forEach(([cat, mins]) => {
+      if (Number(mins) > 0) splits[cat] = Number(mins);
+    });
+    const total = end - start;
+    const allocated = Object.values(splits).reduce((a,b)=>a+b,0);
+    if (!Object.keys(splits).length){
+      errEl.textContent = 'Select at least one category and allocate minutes.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (allocated !== total){
+      errEl.textContent = `Allocated minutes (${allocated}) must equal the entry duration (${total} min). ${total - allocated > 0 ? `Still ${total - allocated} min unallocated.` : ''}`;
+      errEl.style.display = 'block';
+      return;
+    }
+    entry.splits = splits;
+    entry.notes = document.getElementById('breakNotes').value.trim();
+  }
+
+  State.today.entries = State.today.entries.filter(e => e.id !== entry.id);
+  State.today.entries = resolveOverlaps(State.today.entries, entry);
+  State.today.entries.push(entry);
+
+  await saveTodayRecord();
+  closeSheet();
+  renderDashboard();
+  renderDetails();
+  showToast(State.editingEntryId ? 'Entry updated' : 'Entry saved');
+});
+
+// Trims or removes existing entries that overlap the new entry's range.
+function resolveOverlaps(entries, newEntry){
+  const result = [];
+  for (const e of entries){
+    if (e.end <= newEntry.start || e.start >= newEntry.end){
+      result.push(e); // no overlap
+      continue;
+    }
+    if (e.start < newEntry.start){
+      result.push({ ...e, end: newEntry.start }); // trim tail
+    }
+    if (e.end > newEntry.end){
+      result.push({ ...e, id: uid(), start: newEntry.end }); // trim head as a new fragment
+    }
+    // entries fully contained within newEntry's range are dropped
+  }
+  return result.filter(e => e.end > e.start);
+}
+
+document.getElementById('deleteEntryBtn').addEventListener('click', async () => {
+  if (!State.editingEntryId || !State.today) return;
+  State.today.entries = State.today.entries.filter(e => e.id !== State.editingEntryId);
+  await saveTodayRecord();
+  closeSheet();
+  renderDashboard();
+  renderDetails();
+  showToast('Entry deleted');
+});
+
+/* ---------------------------------------------------------
+   10. NAVIGATION
+   --------------------------------------------------------- */
+function showView(name){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view===name));
+  window.scrollTo(0,0);
+  if (name === 'details') renderDetails();
+  if (name === 'calendar') renderCalendar();
+  if (name === 'analytics') renderAnalytics();
+}
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => showView(btn.dataset.view));
+});
+document.getElementById('navCalendarTop').addEventListener('click', () => showView('calendar'));
+document.getElementById('navSettingsTop').addEventListener('click', () => showView('settings'));
+
+window.addEventListener('scroll', () => {
+  document.getElementById('topbar').classList.toggle('scrolled', window.scrollY > 4);
+});
+
+/* ---------------------------------------------------------
+   11. CALENDAR
+   --------------------------------------------------------- */
+let allDaysCache = [];
+
+async function renderCalendar(){
+  allDaysCache = await DB.getAllDays();
+  const cursor = State.calMonthCursor;
+  const year = cursor.getFullYear(), month = cursor.getMonth();
+  document.getElementById('calMonthLabel').textContent =
+    cursor.toLocaleDateString(undefined, { month:'long', year:'numeric' });
+
+  const dowRow = document.getElementById('calDowRow');
+  dowRow.innerHTML = ['S','M','T','W','T','F','S'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+  const firstDay = new Date(year, month, 1);
+  const startOffset = firstDay.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const todayStr = todayKey();
+
+  for (let i=0;i<startOffset;i++){
+    const empty = document.createElement('div');
+    empty.className = 'cal-day empty';
+    grid.appendChild(empty);
+  }
+  for (let day=1; day<=daysInMonth; day++){
+    const dateObj = new Date(year, month, day);
+    const key = todayKey(dateObj);
+    const rec = allDaysCache.find(d => d.date === key);
+    const cell = document.createElement('div');
+    cell.className = 'cal-day' + (key===todayStr ? ' today' : '');
+    let barsHtml = '';
+    if (rec){
+      const timeline = computeFullTimeline(rec, State.settings.wakeDuration);
+      const totals = categoryTotals(timeline);
+      const span = State.settings.wakeDuration*60;
+      barsHtml = '<div class="cal-bars">' + ['work','pbreak','break'].map(k => {
+        const h = Math.max(1, Math.round((totals[k]/span)*16));
+        return `<span style="height:${h}px; background:var(${KIND_COLOR_VAR[k]})"></span>`;
+      }).join('') + '</div>';
+    }
+    cell.innerHTML = `<span>${day}</span>${barsHtml}`;
+    if (rec){
+      cell.addEventListener('click', () => openDayDetail(key));
+    } else {
+      cell.style.opacity = '.45';
+    }
+    grid.appendChild(cell);
+  }
+}
+document.getElementById('calPrevMonth').addEventListener('click', () => {
+  State.calMonthCursor = new Date(State.calMonthCursor.getFullYear(), State.calMonthCursor.getMonth()-1, 1);
+  renderCalendar();
+});
+document.getElementById('calNextMonth').addEventListener('click', () => {
+  State.calMonthCursor = new Date(State.calMonthCursor.getFullYear(), State.calMonthCursor.getMonth()+1, 1);
+  renderCalendar();
+});
+
+async function openDayDetail(dateKey){
+  const rec = await DB.getDay(dateKey);
+  if (!rec) return;
+  State.selectedDayKey = dateKey;
+  const dateObj = new Date(dateKey+'T00:00:00');
+  document.getElementById('dayDetailTitle').textContent = dateObj.toLocaleDateString(undefined,{ weekday:'long', month:'long', day:'numeric' });
+
+  const wakeDurationHours = State.settings.wakeDuration;
+  const wakeAbs = rec.wakeAbs;
+  const sleepAbs = wakeAbs + wakeDurationHours*60;
+  const timeline = computeFullTimeline(rec, wakeDurationHours);
+  const totals = categoryTotals(timeline);
+  const blocks = blockAnalysis(timeline, wakeAbs, wakeDurationHours, State.settings.blockCount);
+
+  const content = document.getElementById('dayDetailContent');
+  content.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:20px;">
+      <div class="stat-card"><div class="stat-label"><span class="dot work"></span>Work</div><div class="stat-value">${durationLabel(totals.work)}</div></div>
+      <div class="stat-card"><div class="stat-label"><span class="dot pbreak"></span>Productive</div><div class="stat-value">${durationLabel(totals.pbreak)}</div></div>
+      <div class="stat-card"><div class="stat-label"><span class="dot break"></span>Break</div><div class="stat-value">${durationLabel(totals.break)}</div></div>
+      <div class="stat-card"><div class="stat-label"><span class="dot unknown"></span>Unaccounted</div><div class="stat-value">${durationLabel(totals.unknown)}</div></div>
+    </div>
+    <div class="section-head"><h2>Block analysis</h2></div>
+    <div class="block-grid" id="dayDetailBlocks" style="margin-bottom:20px;"></div>
+    <div class="section-head"><h2>Timeline</h2></div>
+    <div class="timeline" id="dayDetailTimeline" style="margin-bottom:24px;"></div>
+  `;
+  const blockGrid = document.getElementById('dayDetailBlocks');
+  blocks.forEach(b => {
+    const card = document.createElement('div');
+    card.className = 'block-card';
+    card.innerHTML = `
+      <div class="block-title">Block ${b.index+1}</div>
+      <div class="block-range">${minutesToHM(b.start)}–${minutesToHM(b.end)}</div>
+      <div class="block-mini-row"><span>Work</span><b>${durationLabel(b.totals.work)}</b></div>
+      <div class="block-mini-row"><span>Productive</span><b>${durationLabel(b.totals.pbreak)}</b></div>
+      <div class="block-mini-row"><span>Break</span><b>${durationLabel(b.totals.break)}</b></div>
+    `;
+    blockGrid.appendChild(card);
+  });
+
+  const tlEl = document.getElementById('dayDetailTimeline');
+  if (!timeline.length){
+    tlEl.innerHTML = `<div class="tl-empty">No entries logged this day.</div>`;
+  } else {
+    timeline.forEach(block => {
+      const row = document.createElement('div');
+      row.className = 'tl-row' + (block.synthetic ? ' gap':'');
+      row.innerHTML = `
+        <div class="tl-stripe" style="background:var(${KIND_COLOR_VAR[block.kind]})"></div>
+        <div class="tl-time num">${minutesToHM(block.start)}<br>${minutesToHM(block.end)}</div>
+        <div class="tl-body">
+          <div class="tl-title">${block.synthetic ? 'Unaccounted time' : escapeHtml(entryTitle(block))}</div>
+          <div class="tl-sub">${block.synthetic ? '' : escapeHtml(entrySubtitle(block))}</div>
+        </div>
+        <div class="tl-dur">${durationLabel(block.end-block.start)}</div>
+      `;
+      tlEl.appendChild(row);
+    });
+  }
+
+  showView('daydetail');
+}
+document.getElementById('dayDetailBack').addEventListener('click', () => showView('calendar'));
+
+/* ---------------------------------------------------------
+   12. ANALYTICS (vanilla canvas charts, no libraries)
+   --------------------------------------------------------- */
+document.querySelectorAll('#analyticsRange .seg-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#analyticsRange .seg-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    State.analyticsRange = btn.dataset.range;
+    renderAnalytics();
+  });
+});
+
+function daysForRange(allDays, range){
+  const sorted = [...allDays].sort((a,b)=> a.date.localeCompare(b.date));
+  const now = new Date();
+  if (range === 'daily'){
+    return sorted.filter(d => d.date === todayKey());
+  }
+  if (range === 'weekly'){
+    const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate()-6);
+    return sorted.filter(d => d.date >= todayKey(weekAgo));
+  }
+  // monthly
+  const monthAgo = new Date(now); monthAgo.setDate(monthAgo.getDate()-29);
+  return sorted.filter(d => d.date >= todayKey(monthAgo));
+}
+
+async function renderAnalytics(){
+  const allDays = await DB.getAllDays();
+  const days = daysForRange(allDays, State.analyticsRange);
+  const wakeDurationHours = State.settings.wakeDuration;
+
+  let sumWake=0, sumSleep=0, sumWork=0, sumBreak=0, sumPbreak=0, count=0;
+  const distractionTotals = {}, productiveTotals = {};
+  const trendPoints = [];
+
+  days.forEach(rec => {
+    const timeline = computeFullTimeline(rec, wakeDurationHours);
+    const totals = categoryTotals(timeline);
+    sumWake += rec.wakeAbs % 1440;
+    sumSleep += (rec.wakeAbs + wakeDurationHours*60) % 1440;
+    sumWork += totals.work; sumBreak += totals.break; sumPbreak += totals.pbreak;
+    count++;
+    trendPoints.push({ date: rec.date, work: totals.work/60 });
+    timeline.forEach(b => {
+      if (b.kind==='break' && b.splits) Object.entries(b.splits).forEach(([k,v]) => distractionTotals[k]=(distractionTotals[k]||0)+v);
+      if (b.kind==='pbreak' && b.tags){
+        const share=(b.end-b.start)/Math.max(1,b.tags.length);
+        b.tags.forEach(t=>productiveTotals[t]=(productiveTotals[t]||0)+share);
+      }
+    });
+  });
+
+  const metricsEl = document.getElementById('analyticsMetrics');
+  function metricCard(label, value){
+    return `<div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value">${value}</div></div>`;
+  }
+  metricsEl.innerHTML = count ? [
+    metricCard('Avg. wake time', minutesToDisplay(sumWake/count)),
+    metricCard('Avg. sleep time', minutesToDisplay(sumSleep/count)),
+    metricCard('Avg. work hours', durationLabel(sumWork/count)),
+    metricCard('Avg. break hours', durationLabel(sumBreak/count)),
+    metricCard('Avg. productive break', durationLabel(sumPbreak/count)),
+    metricCard('Days logged', String(count)),
+  ].join('') : `<div class="empty-state" style="grid-column:1/-1;"><p>No data yet for this range.</p></div>`;
+
+  drawCategoryChart('chartCategory', { work:sumWork, pbreak:sumPbreak, break:sumBreak });
+  drawTrendChart('chartTrend', trendPoints);
+
+  renderTopList('topDistractions', distractionTotals);
+  renderTopList('topProductive', productiveTotals);
+}
+
+function renderTopList(elId, totalsObj){
+  const el = document.getElementById(elId);
+  const entries = Object.entries(totalsObj).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  if (!entries.length){
+    el.innerHTML = `<div class="empty-state" style="padding:20px 0;"><p>Nothing logged yet.</p></div>`;
+    return;
+  }
+  el.innerHTML = entries.map(([name,mins],i) => `
+    <div class="top-list-row">
+      <span class="rank">${i+1}</span>
+      <span class="name">${escapeHtml(name)}</span>
+      <span class="amt">${durationLabel(mins)}</span>
+    </div>
+  `).join('');
+}
+
+function setupCanvasForDPR(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width || canvas.parentElement.clientWidth;
+  const h = Number(canvas.getAttribute('height')) || 140;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  canvas.style.width = w+'px'; canvas.style.height = h+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  return { ctx, w, h };
+}
+
+function drawCategoryChart(canvasId, totals){
+  const canvas = document.getElementById(canvasId);
+  const { ctx, w, h } = setupCanvasForDPR(canvas);
+  ctx.clearRect(0,0,w,h);
+  const cats = [
+    { label:'Work', val:totals.work, color:cssVar('--work') },
+    { label:'Productive', val:totals.pbreak, color:cssVar('--pbreak') },
+    { label:'Break', val:totals.break, color:cssVar('--break') },
+  ];
+  const max = Math.max(1, ...cats.map(c=>c.val));
+  const barW = (w - 40) / cats.length;
+  const baseY = h - 26;
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.fillStyle = cssVar('--ink-soft');
+  cats.forEach((c,i) => {
+    const x = 20 + i*barW;
+    const barH = Math.max(2, (c.val/max) * (h - 50));
+    ctx.fillStyle = c.color;
+    roundRect(ctx, x+barW*0.2, baseY-barH, barW*0.6, barH, 5);
+    ctx.fill();
+    ctx.fillStyle = cssVar('--ink-soft');
+    ctx.textAlign = 'center';
+    ctx.fillText(c.label, x+barW/2, h-8);
+    ctx.fillStyle = cssVar('--ink');
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillText(durationLabel(c.val), x+barW/2, baseY-barH-6);
+    ctx.font = '11px -apple-system, sans-serif';
+  });
+}
+
+function drawTrendChart(canvasId, points){
+  const canvas = document.getElementById(canvasId);
+  const { ctx, w, h } = setupCanvasForDPR(canvas);
+  ctx.clearRect(0,0,w,h);
+  if (!points.length){
+    ctx.fillStyle = cssVar('--ink-faint');
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No data yet', w/2, h/2);
+    return;
+  }
+  const max = Math.max(1, ...points.map(p=>p.work));
+  const padL = 28, padR = 10, padT = 14, padB = 22;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+
+  // gridlines
+  ctx.strokeStyle = cssVar('--rule');
+  ctx.lineWidth = 1;
+  for (let i=0;i<=2;i++){
+    const y = padT + plotH*i/2;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+  }
+
+  const stepX = points.length>1 ? plotW/(points.length-1) : 0;
+  ctx.beginPath();
+  points.forEach((p,i) => {
+    const x = padL + i*stepX;
+    const y = padT + plotH - (p.work/max)*plotH;
+    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle = cssVar('--work');
+  ctx.lineWidth = 2.2;
+  ctx.stroke();
+
+  points.forEach((p,i) => {
+    const x = padL + i*stepX;
+    const y = padT + plotH - (p.work/max)*plotH;
+    ctx.beginPath();
+    ctx.arc(x,y,3,0,Math.PI*2);
+    ctx.fillStyle = cssVar('--work');
+    ctx.fill();
+  });
+
+  ctx.fillStyle = cssVar('--ink-faint');
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(max.toFixed(1)+'h', 2, padT+4);
+  ctx.fillText('0h', 2, padT+plotH);
+
+  if (points.length <= 8){
+    ctx.textAlign = 'center';
+    points.forEach((p,i) => {
+      const x = padL + i*stepX;
+      const d = new Date(p.date+'T00:00:00');
+      ctx.fillText(d.getDate(), x, h-6);
+    });
+  }
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+/* ---------------------------------------------------------
+   13. SETTINGS
+   --------------------------------------------------------- */
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  document.querySelectorAll('#themeToggle button').forEach(b => b.classList.toggle('active', b.dataset.theme===theme));
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  metaTheme.setAttribute('content', theme==='dark' ? '#000000' : '#FAF8F4');
+}
+
+document.querySelectorAll('#themeToggle button').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    State.settings.theme = btn.dataset.theme;
+    applyTheme(btn.dataset.theme);
+    await DB.putSettings(State.settings);
+  });
+});
+
+document.getElementById('settingAppName').addEventListener('change', async (e) => {
+  const val = e.target.value.trim() || 'Life Ledger';
+  State.settings.appName = val;
+  document.getElementById('appNameLabel').textContent = val;
+  document.title = val;
+  await DB.putSettings(State.settings);
+  showToast('App name updated');
+});
+
+document.getElementById('settingWakeDuration').addEventListener('change', async (e) => {
+  let val = Number(e.target.value);
+  if (!val || val < 4) val = 16;
+  if (val > 24) val = 24;
+  State.settings.wakeDuration = val;
+  e.target.value = val;
+  await DB.putSettings(State.settings);
+  renderDashboard();
+  renderDetails();
+  showToast('Wake duration updated');
+});
+
+document.getElementById('settingBlockCount').addEventListener('change', async (e) => {
+  let val = Math.round(Number(e.target.value));
+  if (!val || val < 1) val = 4;
+  if (val > 8) val = 8;
+  State.settings.blockCount = val;
+  e.target.value = val;
+  await DB.putSettings(State.settings);
+  renderDashboard();
+  renderDetails();
+  showToast('Block count updated');
+});
+
+document.getElementById('deleteAllBtn').addEventListener('click', async () => {
+  if (!confirm('Delete all Life Ledger data? This cannot be undone.')) return;
+  await DB.clearAllDays();
+  State.today = null;
+  renderDashboard();
+  renderDetails();
+  showToast('All data deleted');
+});
+
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  const allDays = await DB.getAllDays();
+  const payload = { version:1, exportedAt:new Date().toISOString(), settings:State.settings, days:allDays };
+  const blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `life-ledger-backup-${todayKey()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Backup exported');
+});
+
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.days || !Array.isArray(data.days)) throw new Error('Invalid backup file');
+    if (!confirm(`Import ${data.days.length} day(s) of data? This will merge with existing data, overwriting any matching dates.`)) return;
+    for (const day of data.days){
+      await DB.putDay(day);
+    }
+    if (data.settings){
+      State.settings = { ...State.settings, ...data.settings, id:'app' };
+      await DB.putSettings(State.settings);
+      applySettingsToUI();
+    }
+    await ensureTodayLoaded();
+    renderDashboard();
+    showToast('Backup imported successfully');
+  } catch(err){
+    showToast('Could not import file: ' + err.message);
+  }
+  e.target.value = '';
+});
+
+function applySettingsToUI(){
+  document.getElementById('settingAppName').value = State.settings.appName;
+  document.getElementById('appNameLabel').textContent = State.settings.appName;
+  document.title = State.settings.appName;
+  document.getElementById('settingWakeDuration').value = State.settings.wakeDuration;
+  document.getElementById('settingBlockCount').value = State.settings.blockCount;
+  applyTheme(State.settings.theme);
+}
+
+/* ---------------------------------------------------------
+   14. TOAST
+   --------------------------------------------------------- */
+let toastTimeout = null;
+function showToast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+/* ---------------------------------------------------------
+   15. SERVICE WORKER REGISTRATION + UPDATE DETECTION
+   --------------------------------------------------------- */
+function setupServiceWorker(){
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller){
+            document.getElementById('updateBanner').classList.add('show');
+          }
+        });
+      });
+    }).catch(() => {});
+  });
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+  document.getElementById('updateReloadBtn').addEventListener('click', () => {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (reg && reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+    });
+  });
+}
+
+/* ---------------------------------------------------------
+   16. BOOTSTRAP
+   --------------------------------------------------------- */
+async function boot(){
+  const savedSettings = await DB.getSettings();
+  if (savedSettings) State.settings = { ...State.settings, ...savedSettings };
+  applySettingsToUI();
+
+  await ensureTodayLoaded();
+  renderDashboard();
+  updateLiveClockLabel();
+  startClockLoop();
+  setupServiceWorker();
+
+  // Midnight rollover check: if the calendar date changes while the app is open
+  // (e.g. left running overnight), re-evaluate whether "today" needs a fresh wake gate.
+  setInterval(async () => {
+    const key = todayKey();
+    if (key !== State.todayKey){
+      await ensureTodayLoaded();
+      renderDashboard();
+    }
+  }, 60*1000);
+}
+
+boot();
+</script>
+
+</body>
+</html>
