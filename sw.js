@@ -3,13 +3,13 @@
  * Bump CACHE_VERSION any time index.html/manifest/icons change.
  */
 
-const CACHE_VERSION = 'life-ledger-v1.1';
+const CACHE_VERSION = 'life-ledger-v1.2';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
